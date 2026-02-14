@@ -1,7 +1,10 @@
 import { defineNuxtModule } from '@nuxt/kit'
 import { build, startup } from 'vite-plugin-electron'
 import type { ElectronOptions } from 'vite-plugin-electron'
-import type { ResolvedConfig, ViteDevServer } from 'vite'
+
+// Use inline types to avoid requiring `vite` as a direct dependency
+type ViteResolvedConfig = { mode: string }
+type ViteDevServer = { ws: { send: (payload: { type: string }) => void } }
 
 export interface ModuleOptions {
   /**
@@ -35,18 +38,18 @@ export default defineNuxtModule<ModuleOptions>({
     }
 
     // Resolve the Vite config so we can pass mode to electron builds
-    let viteConfigResolve: (config: ResolvedConfig) => void
-    const viteConfigPromise = new Promise<ResolvedConfig>(resolve => viteConfigResolve = resolve)
+    let viteConfigResolve: (config: ViteResolvedConfig) => void
+    const viteConfigPromise = new Promise<ViteResolvedConfig>(resolve => viteConfigResolve = resolve)
 
     // Capture the Vite dev server instance for HMR reload
     let viteServerResolve: (server: ViteDevServer) => void
     const viteServerPromise = new Promise<ViteDevServer>(resolve => viteServerResolve = resolve)
 
     nuxt.hook('vite:extendConfig', (viteInlineConfig) => {
-      viteInlineConfig.plugins ??= []
-      viteInlineConfig.plugins.push({
+      ;(viteInlineConfig.plugins as unknown[]) ??= []
+      ;(viteInlineConfig.plugins as unknown[]).push({
         name: 'electron:capture-config',
-        configResolved(config) {
+        configResolved(config: ViteResolvedConfig) {
           viteConfigResolve(config)
         },
       })
@@ -59,7 +62,10 @@ export default defineNuxtModule<ModuleOptions>({
     // Prevent Electron from trying to lazy-load chunks via HTTP in production
     nuxt.hook('build:manifest', (manifest) => {
       for (const key in manifest) {
-        manifest[key].dynamicImports = []
+        const entry = manifest[key]
+        if (entry) {
+          entry.dynamicImports = []
+        }
       }
     })
 
