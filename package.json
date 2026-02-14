@@ -7,6 +7,10 @@
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
+    "build:electron": "nuxt build && electron-builder --mac",
+    "build:electron:win": "nuxt build && electron-builder --win",
+    "build:electron:linux": "nuxt build && electron-builder --linux",
+    "build:electron:all": "nuxt build && electron-builder --mac --win --linux",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",

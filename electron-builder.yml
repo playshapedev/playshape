@@ -1,0 +1,73 @@
+appId: com.playshape.app
+productName: Playshape
+copyright: Copyright © 2026 Playshape Contributors
+
+# Disable asar for now — better-sqlite3's native .node addon
+# doesn't work inside an asar archive without extra configuration.
+asar: false
+
+directories:
+  output: release/${version}
+
+# Files to include in the app bundle (relative to project root).
+# This includes the compiled Electron entries and the full Nuxt/Nitro output.
+files:
+  - dist-electron/**/*
+  - .output/**/*
+  - build/icons/**/*
+  - "!**/{.DS_Store,.git,.hg,.svn,CVS,RCS,SCCS,.gitignore,.gitattributes}"
+  - "!**/{thumbs.db,desktop.ini}"
+  - "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}"
+  - "!**/node_modules/*/{.bin,.cache,.nyc_output}"
+  - "!**/node_modules/.package-lock.json"
+
+# Database migrations need to be accessible at a known path on disk,
+# outside the app bundle, so Drizzle can read them at runtime.
+extraResources:
+  - from: server/database/migrations
+    to: migrations
+    filter:
+      - "**/*"
+
+mac:
+  icon: build/icons/icon.icns
+  category: public.app-category.education
+  target:
+    - dmg
+    - zip
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+win:
+  icon: build/icons/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+
+linux:
+  icon: build/icons/icon.png
+  category: Education
+  target:
+    - AppImage
+    - deb
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
