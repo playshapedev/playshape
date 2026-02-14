@@ -1,0 +1,112 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/*
+ * ── Brand Color Palettes ──────────────────────────────────────────────────────
+ * Primary: dark purple #2E3086
+ * Generated 11-shade scale (50–950) around the brand primary.
+ *
+ * Neutral: deep indigo-tinted neutral for surfaces/text.
+ * Using a custom scale that tints neutral grays with the brand purple.
+ */
+@theme static {
+  /* Primary — deep indigo/purple brand color */
+  --color-playshape-50: #eef0ff;
+  --color-playshape-100: #e0e2ff;
+  --color-playshape-200: #c7c9ff;
+  --color-playshape-300: #a5a5ff;
+  --color-playshape-400: #8a7dfc;
+  --color-playshape-500: #7458f5;
+  --color-playshape-600: #5f38e8;
+  --color-playshape-700: #4e29cc;
+  --color-playshape-800: #3e24a4;
+  --color-playshape-900: #2e3086;
+  --color-playshape-950: #1c1a5e;
+
+  /* Brand accent colors — available as utilities (e.g. text-brand-yellow) */
+  --color-brand-yellow: #FFCA00;
+  --color-brand-green: #90D20E;
+  --color-brand-blue: #24ACFF;
+  --color-brand-pink: #FF467C;
+  --color-brand-orange: #FBA304;
+  --color-brand-violet: #9F46EB;
+  --color-brand-red: #FF0045;
+}
+
+/*
+ * ── Font ──────────────────────────────────────────────────────────────────────
+ * Poppins — loaded automatically by @nuxt/fonts when referenced in @theme.
+ */
+@theme {
+  --font-sans: 'Poppins', system-ui, sans-serif;
+}
+
+/*
+ * ── CSS Variable Overrides ────────────────────────────────────────────────────
+ */
+:root {
+  --ui-radius: 0.5rem;
+}
+
+/*
+ * ── Dark Mode Background ──────────────────────────────────────────────────────
+ * Override the default dark bg to the brand dark purple.
+ */
+.dark {
+  --ui-bg-default: var(--color-playshape-900);
+  --ui-bg-muted: var(--color-playshape-950);
+  --ui-bg-elevated: color-mix(in oklch, var(--color-playshape-900) 85%, white);
+}
+
+/*
+ * ── Heading Typography ────────────────────────────────────────────────────────
+ * Mapped from the brand hierarchy:
+ *   H1: Black (900)  — largest
+ *   H2: Extra Bold (800)
+ *   H3: Bold (700)
+ *   H4: Semi Bold (600)
+ *   Body: Regular (400)
+ */
+h1 {
+  font-weight: 900;
+  letter-spacing: 0;
+}
+h2 {
+  font-weight: 800;
+  letter-spacing: 0;
+}
+h3 {
+  font-weight: 700;
+  letter-spacing: 0;
+}
+h4 {
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/*
+ * ── Interactive Elements ──────────────────────────────────────────────────────
+ */
+button,
+[role="button"],
+a[href],
+summary {
+  cursor: pointer;
+}
+
+/*
+ * ── Electron Title Bar ────────────────────────────────────────────────────────
+ * When running in Electron with hiddenInset title bar (macOS), the navbar area
+ * becomes draggable for window movement. The .electron-titlebar class is added
+ * via global app.config dashboardNavbar override. Platform detection and traffic
+ * light clearance is handled in the dashboard layout component.
+ */
+html.electron .electron-titlebar {
+  -webkit-app-region: drag;
+}
+html.electron .electron-titlebar a,
+html.electron .electron-titlebar button,
+html.electron .electron-titlebar input,
+html.electron .electron-titlebar [role="button"] {
+  -webkit-app-region: no-drag;
+}

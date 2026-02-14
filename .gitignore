@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Nuxt
+.nuxt/
+.output/
+
+# Electron
+dist-electron/
+dist/
+
+# Database
+data/
+
+# Build
+.cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# OpenCode tooling
+.opencode/node_modules/
+.opencode/bun.lock

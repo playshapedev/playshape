@@ -1,0 +1,51 @@
+{
+  "name": "playshape",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-powered interactive practice activities for learning experience designers",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "vue-tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "generate:icons": "node scripts/generate-icons.mjs"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@parcel/watcher",
+      "better-sqlite3",
+      "electron",
+      "electron-winstaller",
+      "esbuild",
+      "sharp",
+      "unrs-resolver",
+      "vue-demi"
+    ]
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^1.15.1",
+    "@nuxt/fonts": "^0.14.0",
+    "@nuxt/kit": "^4.3.1",
+    "@nuxt/ui": "^4.0.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "drizzle-kit": "^0.31.9",
+    "electron": "^34.0.0",
+    "electron-builder": "^26.0.0",
+    "nuxt": "^4.0.0",
+    "sharp": "^0.34.5",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.0",
+    "vite-plugin-electron": "^0.29.0",
+    "vue-tsc": "^2.2.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "drizzle-orm": "^0.45.1",
+    "zod": "^4.3.6"
+  }
+}
