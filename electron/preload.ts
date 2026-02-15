@@ -10,8 +10,13 @@ import { contextBridge, ipcRenderer } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
   platform: process.platform,
+  isDev: process.env.NODE_ENV !== 'production',
   /** Signal to the main process that the Vue app has rendered. */
   appReady: () => ipcRenderer.send('app-ready'),
+  /** Open DevTools and inspect the element at the given coordinates. */
+  inspectElement: (x: number, y: number) => ipcRenderer.send('inspect-element', x, y),
+  /** Show or hide the macOS traffic light buttons. */
+  setTrafficLightsVisible: (visible: boolean) => ipcRenderer.send('set-traffic-lights-visible', visible),
 })
 
 // Mark the platform on <html> so CSS can apply platform-specific styles

@@ -35,94 +35,82 @@ async function handleCreate() {
 </script>
 
 <template>
-  <div class="flex flex-1 min-w-0">
-    <UDashboardPanel>
-      <template #header>
-        <UDashboardNavbar title="Libraries">
-          <template #leading>
-            <UDashboardSidebarCollapse />
-          </template>
-          <template #right>
-            <UButton
-              label="New Library"
-              icon="i-lucide-plus"
-              @click="showCreateModal = true"
-            />
-          </template>
-        </UDashboardNavbar>
-      </template>
+  <!-- Navbar actions -->
+  <Teleport defer to="#navbar-actions">
+    <UButton
+      label="New Library"
+      icon="i-lucide-plus"
+      @click="showCreateModal = true"
+    />
+  </Teleport>
 
-      <template #body>
-        <!-- Loading -->
-        <div v-if="pending" class="flex items-center justify-center py-12">
-          <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
-        </div>
-
-        <!-- Empty state -->
-        <EmptyState
-          v-else-if="!libraries?.length"
-          icon="i-lucide-library-big"
-          title="No libraries yet"
-          description="Create a library to organize your source content for generating practice activities."
-        >
-          <UButton
-            label="Create Library"
-            icon="i-lucide-plus"
-            @click="showCreateModal = true"
-          />
-        </EmptyState>
-
-        <!-- Library grid -->
-        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <LibraryCard
-            v-for="library in libraries"
-            :key="library.id"
-            :library="library"
-          />
-        </div>
-      </template>
-    </UDashboardPanel>
-
-    <!-- Create modal -->
-    <UModal v-model:open="showCreateModal">
-      <template #header>
-        <h3 class="text-lg font-semibold">New Library</h3>
-      </template>
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Name" required>
-            <UInput
-              v-model="newLibraryName"
-              placeholder="e.g. Product Knowledge, Company Policies"
-              autofocus
-              @keydown.enter="handleCreate"
-            />
-          </UFormField>
-          <UFormField label="Description">
-            <UTextarea
-              v-model="newLibraryDescription"
-              placeholder="What kind of content will this library contain?"
-              :rows="3"
-            />
-          </UFormField>
-        </div>
-      </template>
-      <template #footer>
-        <div class="flex justify-end gap-2">
-          <UButton
-            label="Cancel"
-            color="neutral"
-            variant="ghost"
-            @click="showCreateModal = false"
-          />
-          <UButton
-            label="Create"
-            :loading="creating"
-            :disabled="!newLibraryName.trim()"
-            @click="handleCreate"
-          />
-        </div>
-      </template>
-    </UModal>
+  <!-- Loading -->
+  <div v-if="pending" class="flex items-center justify-center py-12">
+    <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
   </div>
+
+  <!-- Empty state -->
+  <EmptyState
+    v-else-if="!libraries?.length"
+    icon="i-lucide-library-big"
+    title="No libraries yet"
+    description="Create a library to organize your source content for generating practice activities."
+  >
+    <UButton
+      label="Create Library"
+      icon="i-lucide-plus"
+      @click="showCreateModal = true"
+    />
+  </EmptyState>
+
+  <!-- Library grid -->
+  <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <LibraryCard
+      v-for="library in libraries"
+      :key="library.id"
+      :library="library"
+    />
+  </div>
+
+  <!-- Create modal -->
+  <UModal v-model:open="showCreateModal">
+    <template #header>
+      <h3 class="text-lg font-semibold">New Library</h3>
+    </template>
+    <template #body>
+      <div class="space-y-4">
+        <UFormField label="Name" required>
+          <UInput
+            v-model="newLibraryName"
+            placeholder="e.g. Product Knowledge, Company Policies"
+            autofocus
+            @keydown.enter="handleCreate"
+          />
+        </UFormField>
+        <UFormField label="Description">
+          <UTextarea
+            v-model="newLibraryDescription"
+            placeholder="What kind of content will this library contain?"
+            :rows="3"
+          />
+        </UFormField>
+      </div>
+    </template>
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <UButton
+          label="Cancel"
+          color="neutral"
+          variant="ghost"
+          @click="showCreateModal = false"
+        />
+        <UButton
+          label="Create"
+          :loading="creating"
+          :disabled="!newLibraryName.trim()"
+          @click="handleCreate"
+        />
+      </div>
+    </template>
+  </UModal>
 </template>

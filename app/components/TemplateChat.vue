@@ -13,6 +13,7 @@ const emit = defineEmits<{
 const {
   chat,
   sendMessage,
+  stopGeneration,
   onTemplateUpdate,
   reportPreviewError,
 } = useTemplateChat(props.templateId, props.initialMessages)
@@ -22,6 +23,8 @@ onTemplateUpdate.value = () => emit('update')
 
 // Expose reportPreviewError so the parent page can forward preview errors
 defineExpose({ reportPreviewError })
+
+const isRunning = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
 
 const input = ref('')
 const customAnswer = ref('')
@@ -54,8 +57,15 @@ const pendingQuestion = computed(() => {
   return null
 })
 
-// Keyboard shortcuts for question buttons (1-9)
+// Keyboard shortcuts for question buttons (1-9) and Escape to stop
 function onKeyDown(e: KeyboardEvent) {
+  // Escape stops generation
+  if (e.key === 'Escape' && isRunning.value) {
+    e.preventDefault()
+    stopGeneration()
+    return
+  }
+
   if (!pendingQuestion.value || chat.status === 'streaming' || showCustomInput.value) return
   const num = parseInt(e.key)
   const totalOptions = pendingQuestion.value.options.length + 1 // +1 for "Type answer"
@@ -244,6 +254,24 @@ watch(() => chat.messages.length, (count) => {
 
               <!-- Get template: done (no need to show anything, but keep it quiet) -->
 
+              <!-- Get reference: loading -->
+              <div
+                v-else-if="part.type === 'tool-get_reference' && (part as any).state !== 'output-available'"
+                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+              >
+                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                Reading {{ (part as any).input?.topic || 'reference' }} docs...
+              </div>
+
+              <!-- Get reference: done -->
+              <div
+                v-else-if="part.type === 'tool-get_reference' && (part as any).state === 'output-available'"
+                class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
+              >
+                <UIcon name="i-lucide-book-open" class="size-3.5" />
+                Loaded {{ (part as any).input?.topic || 'reference' }} docs
+              </div>
+
               <!-- Ask question indicator -->
               <div
                 v-else-if="part.type === 'tool-ask_question'"
@@ -347,12 +375,22 @@ watch(() => chat.messages.length, (count) => {
           v-model="input"
           placeholder="Describe your activity..."
           class="flex-1"
-          :disabled="chat.status !== 'ready'"
+          :disabled="isRunning"
           @keydown.enter="handleSend"
+          @keydown.escape="isRunning && stopGeneration()"
         />
+        <!-- Stop button while running -->
         <UButton
+          v-if="isRunning"
+          icon="i-lucide-square"
+          color="error"
+          variant="soft"
+          @click="stopGeneration"
+        />
+        <!-- Send button when ready -->
+        <UButton
+          v-else
           icon="i-lucide-send"
-          :loading="chat.status === 'streaming' || chat.status === 'submitted'"
           :disabled="!input.trim()"
           @click="handleSend"
         />

@@ -266,10 +266,20 @@ The editor page (`/templates/:id`) is a two-panel layout:
 
 ### AI Chat Tools
 
-The chat uses AI SDK `streamText()` with two tools:
+The chat uses AI SDK `streamText()` with four tools:
 
 - **`ask_question`** — Prompts the user with structured multiple-choice buttons. When called, the text input is completely hidden and replaced with clickable option buttons. Keyboard shortcuts (1-9) allow fast selection.
+- **`get_template`** — Retrieves the current template state (name, description, input schema, component source, sample data, dependencies, tools). The LLM calls this before modifying an existing template.
+- **`get_reference`** — Fetches UI component and design system documentation from `.agents/skills/nuxt-ui/references/`. The LLM calls this before building complex interfaces to understand component patterns and design conventions. Topics: `overview`, `components`, `theming`, `composables`, `layout-dashboard`, `layout-page`, `layout-chat`, `layout-docs`, `layout-editor`. In production (Electron), reference files are bundled via `extraResources` and resolved via `PLAYSHAPE_RESOURCES_PATH`.
 - **`update_template`** — Provides the template output (input schema + Vue SFC). Automatically persists to the database and updates the preview.
+
+### Design Token System
+
+The preview iframe includes a design token system that mirrors Nuxt UI's CSS custom properties. This gives the LLM a vocabulary of semantic variables (`--ui-primary`, `--ui-text-muted`, `--ui-bg-elevated`, `--ui-radius`, etc.) and Tailwind utility extensions (`text-default`, `bg-elevated`, `border-default`, `rounded-ui`, `bg-primary`, etc.) so generated components look consistent with the app's design language.
+
+Nuxt UI components (`<UButton>`, `<UCard>`, etc.) do NOT run in the iframe — they require Nuxt's build-time module system. Instead, the LLM generates plain HTML + Tailwind CSS that follows Nuxt UI's visual patterns. The `get_reference` tool provides documentation about those patterns on demand.
+
+Tokens default to the app's current theme (playshape primary color, slate neutral). The token structure is designed to be user-configurable in the future — the CSS variables can be driven by a theme object passed as a prop to `TemplatePreview.vue`.
 
 ### Template Conventions
 

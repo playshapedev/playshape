@@ -35,53 +35,42 @@ async function handleCreate() {
 </script>
 
 <template>
-  <div class="flex flex-1 min-w-0">
-  <UDashboardPanel>
-    <template #header>
-      <UDashboardNavbar title="Projects">
-        <template #leading>
-          <UDashboardSidebarCollapse />
-        </template>
-        <template #right>
-          <UButton
-            label="New Project"
-            icon="i-lucide-plus"
-            @click="showCreateModal = true"
-          />
-        </template>
-      </UDashboardNavbar>
-    </template>
+  <!-- Navbar actions -->
+  <Teleport defer to="#navbar-actions">
+    <UButton
+      label="New Project"
+      icon="i-lucide-plus"
+      @click="showCreateModal = true"
+    />
+  </Teleport>
 
-    <template #body>
-      <!-- Loading -->
-      <div v-if="pending" class="flex items-center justify-center py-12">
-        <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
-      </div>
+  <!-- Loading -->
+  <div v-if="pending" class="flex items-center justify-center py-12">
+    <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
+  </div>
 
-      <!-- Empty state -->
-      <EmptyState
-        v-else-if="!projects?.length"
-        icon="i-lucide-folder-open"
-        title="No projects yet"
-        description="Create your first project to start building practice activities."
-      >
-        <UButton
-          label="Create Project"
-          icon="i-lucide-plus"
-          @click="showCreateModal = true"
-        />
-      </EmptyState>
+  <!-- Empty state -->
+  <EmptyState
+    v-else-if="!projects?.length"
+    icon="i-lucide-folder-open"
+    title="No projects yet"
+    description="Create your first project to start building practice activities."
+  >
+    <UButton
+      label="Create Project"
+      icon="i-lucide-plus"
+      @click="showCreateModal = true"
+    />
+  </EmptyState>
 
-      <!-- Project grid -->
-      <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <ProjectCard
-          v-for="project in projects"
-          :key="project.id"
-          :project="project"
-        />
-      </div>
-    </template>
-  </UDashboardPanel>
+  <!-- Project grid -->
+  <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <ProjectCard
+      v-for="project in projects"
+      :key="project.id"
+      :project="project"
+    />
+  </div>
 
   <!-- Create modal -->
   <UModal v-model:open="showCreateModal">
@@ -124,5 +113,4 @@ async function handleCreate() {
       </div>
     </template>
   </UModal>
-  </div>
 </template>

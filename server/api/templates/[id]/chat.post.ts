@@ -2,18 +2,22 @@ import { z } from 'zod'
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
 import type { UIMessage } from 'ai'
 import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
 import { templates } from '~~/server/database/schema'
 import type { TemplateField, TemplateDependency } from '~~/server/database/schema'
 
 const SYSTEM_PROMPT = `You are a helpful assistant that builds interactive practice activity templates for learning experience designers. Your goal is to help the user create a Vue 3 activity component through guided conversation.
 
-You have three tools available:
+You have four tools available:
 
 1. **ask_question** — Use this to ask the user a structured multiple-choice question. Each option should be a clear, distinct choice. Use this tool frequently to guide the design process rather than asking open-ended questions. Keep questions focused and options concise. Note: the UI automatically appends a "Type my own answer" option to every question, so the user may respond with free-text instead of one of your provided options. Handle this gracefully.
 
 2. **get_template** — Use this to retrieve the current state of the template, including its name, description, input schema (field definitions), sample data, and Vue component source code. Call this when the user asks about the current template, wants to modify it, or when you need to see what already exists before making changes. Always call this before issuing an update_template if there's an existing template you haven't seen yet.
 
-3. **update_template** — Use this to provide or update the template definition. Call this whenever you have enough information to generate or improve the template. The template has three parts:
+3. **get_reference** — Use this to fetch detailed UI component and design system documentation. Call this before building complex interfaces to understand component patterns, layout compositions, and design conventions. See the "Design System" section below for available topics.
+
+4. **update_template** — Use this to provide or update the template definition. Call this whenever you have enough information to generate or improve the template. The template has three parts:
    - **fields**: An array of field definitions that describe what data the template needs. Available field types:
      - \`text\` — Single-line text input. Supports \`placeholder\` and \`default\`.
      - \`textarea\` — Multi-line text input. Supports \`placeholder\` and \`default\`.
@@ -106,7 +110,127 @@ Supports syntax highlighting, autocomplete, multi-language, diff editor, etc. Do
 
 **IMPORTANT:** Do NOT use \`declare global\` or ambient type declarations in the component — the SFC runtime compiler does not support them and will throw a parse error. Always use \`(window as any)\` to access tool globals like \`monaco\` and \`__monacoReady\`.
 
-The component receives a single \`data\` prop with keys matching the field IDs from the input schema. For array fields, the value will be an array of objects with keys matching the sub-field IDs. Always use \`<script setup lang="ts">\` and defineProps.`
+The component receives a single \`data\` prop with keys matching the field IDs from the input schema. For array fields, the value will be an array of objects with keys matching the sub-field IDs. Always use \`<script setup lang="ts">\` and defineProps.
+
+## Design System
+
+The preview iframe includes a design token system based on CSS custom properties. Use these tokens for consistent, professional-looking components. The tokens provide semantic colors, text styles, backgrounds, borders, and spacing that automatically work in both light and dark modes.
+
+### Available CSS utilities (via Tailwind)
+
+**Text colors:** \`text-default\` (body), \`text-muted\` (secondary), \`text-dimmed\` (hints/placeholders), \`text-toned\` (subtitles), \`text-highlighted\` (headings/emphasis), \`text-inverted\` (on dark/light bg)
+
+**Backgrounds:** \`bg-default\` (page), \`bg-muted\` (subtle sections), \`bg-elevated\` (cards/modals), \`bg-accented\` (hover states), \`bg-inverted\` (inverted sections)
+
+**Borders:** \`border-default\`, \`border-muted\`, \`border-accented\`, \`border-inverted\`
+
+**Primary color scale:** \`text-primary\`, \`bg-primary\`, \`border-primary\`, \`ring-primary\` (resolves to brand purple). Full scale available: \`bg-primary-50\` through \`bg-primary-950\`, same for text/border/ring.
+
+**Neutral scale:** \`text-neutral-500\`, \`bg-neutral-100\`, \`border-neutral-200\`, etc. (slate gray scale)
+
+**Status colors (raw CSS vars):** \`var(--ui-color-success)\` (green), \`var(--ui-color-info)\` (blue), \`var(--ui-color-warning)\` (yellow), \`var(--ui-color-error)\` (red)
+
+**Border radius:** \`rounded-ui\` for the app's standard radius. Or use \`var(--ui-radius)\` directly.
+
+### Common UI patterns
+
+Use these Tailwind patterns to build clean, consistent interfaces:
+
+**Card:**
+\`\`\`html
+<div class="rounded-ui border border-default bg-default p-4 sm:p-6 space-y-3">
+  <div class="border-b border-default pb-3 font-semibold text-highlighted">Header</div>
+  <div class="text-default">Body content</div>
+  <div class="border-t border-default pt-3 text-muted text-sm">Footer</div>
+</div>
+\`\`\`
+
+**Button (solid):**
+\`\`\`html
+<button class="inline-flex items-center gap-2 px-4 py-2 rounded-ui bg-primary text-white text-sm font-medium hover:opacity-90 transition">Label</button>
+\`\`\`
+
+**Button (outline):**
+\`\`\`html
+<button class="inline-flex items-center gap-2 px-4 py-2 rounded-ui border border-default text-default text-sm font-medium hover:bg-accented transition">Label</button>
+\`\`\`
+
+**Badge:**
+\`\`\`html
+<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700">Badge</span>
+\`\`\`
+
+**Input:**
+\`\`\`html
+<input class="w-full px-3 py-2 rounded-ui border border-default bg-default text-default placeholder:text-dimmed text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition" />
+\`\`\`
+
+**Alert/Callout:**
+\`\`\`html
+<div class="flex gap-3 p-4 rounded-ui border border-primary/20 bg-primary-50 text-sm">
+  <span class="text-primary">ℹ</span>
+  <div class="text-default">Alert message here</div>
+</div>
+\`\`\`
+
+**Separator:**
+\`\`\`html
+<div class="border-t border-default my-4"></div>
+\`\`\`
+
+**Tab bar:**
+\`\`\`html
+<div class="flex border-b border-default">
+  <button class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary">Active</button>
+  <button class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-muted hover:text-default transition">Inactive</button>
+</div>
+\`\`\`
+
+### \`get_reference\` tool
+
+You have a \`get_reference\` tool that fetches detailed UI component and design system documentation. **Call this before building complex interfaces** (forms, dashboards, data displays, chat UIs, etc.) to get the full API reference for relevant components and layout patterns. Topics available:
+- \`overview\` — Full component library overview with examples
+- \`components\` — All 125+ components organized by category with props and slots
+- \`theming\` — Color system, CSS variables, customization patterns
+- \`composables\` — Toast notifications, programmatic overlays, keyboard shortcuts
+- \`layout-dashboard\` — Admin panel with sidebar, panels, navbar patterns
+- \`layout-page\` — Landing pages, marketing pages, blog layouts
+- \`layout-chat\` — AI chat interfaces with messages, prompt, model selector
+- \`layout-docs\` — Documentation sites with navigation and TOC
+- \`layout-editor\` — Rich text editor with toolbars
+
+Note: The reference docs describe Nuxt UI components (\`<UButton>\`, \`<UCard>\`, etc.) which are NOT available in the preview iframe. Use the docs to understand the **visual patterns, prop structures, and layout compositions**, then implement them using plain HTML + Tailwind CSS with the design tokens above. Do NOT generate \`<UButton>\`, \`<UCard>\`, or any \`<U*>\` components — they will not render.`
+
+// ── Reference file paths for the get_reference tool ──────────────────────────
+const REFERENCE_FILE_MAP: Record<string, string> = {
+  'overview': 'SKILL.md',
+  'components': 'references/components.md',
+  'theming': 'references/theming.md',
+  'composables': 'references/composables.md',
+  'layout-dashboard': 'references/layouts/dashboard.md',
+  'layout-page': 'references/layouts/page.md',
+  'layout-chat': 'references/layouts/chat.md',
+  'layout-docs': 'references/layouts/docs.md',
+  'layout-editor': 'references/layouts/editor.md',
+}
+
+/**
+ * Resolve the path to a UI reference file.
+ * In development: reads from the .agents/skills/nuxt-ui/ directory in the project root.
+ * In production (Electron): reads from extraResources.
+ */
+function getReferencePath(topic: string): string {
+  const relativePath = REFERENCE_FILE_MAP[topic]
+  if (!relativePath) throw new Error(`Unknown reference topic: ${topic}`)
+
+  // In production, reference files are bundled as extra resources
+  if (process.env.PLAYSHAPE_RESOURCES_PATH) {
+    return join(process.env.PLAYSHAPE_RESOURCES_PATH, 'ui-references', relativePath)
+  }
+
+  // In development, read from the project's .agents/skills directory
+  return join(process.cwd(), '.agents', 'skills', 'nuxt-ui', relativePath)
+}
 
 // Field type enum shared across all nesting levels
 const fieldTypeEnum = z.enum(['text', 'textarea', 'dropdown', 'checkbox', 'number', 'color', 'array'])
@@ -199,6 +323,33 @@ export default defineLazyEventHandler(() => {
       messages: convertedMessages,
       stopWhen: stepCountIs(5),
       tools: {
+        get_reference: tool({
+          description: 'Fetch UI component and design system documentation. Call this before building complex interfaces (forms, dashboards, data displays, chat UIs). Returns markdown documentation for the requested topic.',
+          inputSchema: z.object({
+            topic: z.enum([
+              'overview',
+              'components',
+              'theming',
+              'composables',
+              'layout-dashboard',
+              'layout-page',
+              'layout-chat',
+              'layout-docs',
+              'layout-editor',
+            ]).describe('The documentation topic to fetch'),
+          }),
+          execute: async ({ topic }) => {
+            try {
+              const filePath = getReferencePath(topic)
+              const content = readFileSync(filePath, 'utf-8')
+              return { topic, content }
+            }
+            catch (err: unknown) {
+              const message = err instanceof Error ? err.message : 'Failed to read reference file'
+              return { topic, error: message }
+            }
+          },
+        }),
         get_template: tool({
           description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes.',
           inputSchema: z.object({}),

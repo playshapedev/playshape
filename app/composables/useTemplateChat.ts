@@ -80,9 +80,22 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
     }
   }
 
+  /**
+   * Stop the current generation immediately.
+   * Aborts the in-flight request, keeps any tokens already received,
+   * and saves the conversation so the user can continue.
+   */
+  async function stopGeneration() {
+    if (chat.status !== 'streaming' && chat.status !== 'submitted') return
+    await chat.stop()
+    // Persist whatever we have so far
+    await saveMessages()
+  }
+
   return {
     chat,
     sendMessage,
+    stopGeneration,
     saveMessages,
     onTemplateUpdate,
     reportPreviewError,

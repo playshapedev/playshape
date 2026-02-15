@@ -4,6 +4,9 @@ export default defineAppConfig({
       primary: 'playshape',
       neutral: 'slate',
     },
+    dashboardGroup: {
+      base: 'dashboard-root',
+    },
     input: {
       slots: {
         root: 'relative flex items-center',
@@ -22,11 +25,6 @@ export default defineAppConfig({
     selectMenu: {
       slots: {
         base: 'w-full',
-      },
-    },
-    dashboardNavbar: {
-      slots: {
-        root: 'electron-titlebar',
       },
     },
   },

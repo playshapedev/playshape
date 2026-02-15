@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, nativeImage, net, utilityProcess } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, net, screen, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import path from 'node:path'
+import fs from 'node:fs'
 import { createServer } from 'node:net'
 
 // The built directory structure
@@ -130,6 +131,73 @@ async function startNitroServer(): Promise<string> {
   return url
 }
 
+// ── Window state persistence ────────────────────────────────────────────────
+// Saves window position, size, and maximized state to a JSON file in userData.
+// Restored on next launch so the window reappears where the user left it.
+
+interface WindowState {
+  x?: number
+  y?: number
+  width: number
+  height: number
+  isMaximized?: boolean
+}
+
+const WINDOW_STATE_FILE = path.join(app.getPath('userData'), 'window-state.json')
+
+const DEFAULT_STATE: WindowState = { width: 1280, height: 800 }
+
+function loadWindowState(): WindowState {
+  try {
+    const data = fs.readFileSync(WINDOW_STATE_FILE, 'utf-8')
+    const state = JSON.parse(data) as WindowState
+
+    // Validate that the saved position is still on a visible display.
+    // If the user disconnected a monitor, the window could be off-screen.
+    if (state.x !== undefined && state.y !== undefined) {
+      const visible = screen.getAllDisplays().some((display) => {
+        const { x, y, width, height } = display.bounds
+        return (
+          state.x! >= x - 100
+          && state.x! < x + width
+          && state.y! >= y - 100
+          && state.y! < y + height
+        )
+      })
+      if (!visible) {
+        // Reset position, keep size
+        delete state.x
+        delete state.y
+      }
+    }
+
+    return { ...DEFAULT_STATE, ...state }
+  }
+  catch {
+    return DEFAULT_STATE
+  }
+}
+
+function saveWindowState(win: BrowserWindow): void {
+  const isMaximized = win.isMaximized()
+  // Save the normal (non-maximized) bounds so restoring from maximized
+  // doesn't persist the full-screen dimensions as the "normal" size.
+  const bounds = isMaximized ? win.getNormalBounds() : win.getBounds()
+  const state: WindowState = {
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    isMaximized,
+  }
+  try {
+    fs.writeFileSync(WINDOW_STATE_FILE, JSON.stringify(state))
+  }
+  catch {
+    // Silently ignore write errors (e.g. read-only filesystem)
+  }
+}
+
 async function createWindow() {
   const icon = nativeImage.createFromPath(APP_ICON)
 
@@ -140,10 +208,13 @@ async function createWindow() {
   }
 
   const isMac = process.platform === 'darwin'
+  const windowState = loadWindowState()
 
   mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    width: windowState.width,
+    height: windowState.height,
+    x: windowState.x,
+    y: windowState.y,
     minWidth: 900,
     minHeight: 600,
     title: 'Playshape',
@@ -163,7 +234,7 @@ async function createWindow() {
         height: 40,
       },
     }),
-    trafficLightPosition: isMac ? { x: 16, y: 12 } : undefined,
+    trafficLightPosition: isMac ? { x: 16, y: 13 } : undefined,
 
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -171,6 +242,26 @@ async function createWindow() {
       nodeIntegration: false,
     },
   })
+
+  // Restore maximized state after window is created
+  if (windowState.isMaximized) {
+    mainWindow.maximize()
+  }
+
+  // Save window state on resize, move, maximize, and unmaximize.
+  // Debounce resize/move since they fire rapidly during drag.
+  let saveTimeout: ReturnType<typeof setTimeout> | null = null
+  const debouncedSave = () => {
+    if (saveTimeout) clearTimeout(saveTimeout)
+    saveTimeout = setTimeout(() => {
+      if (mainWindow) saveWindowState(mainWindow)
+    }, 500)
+  }
+
+  mainWindow.on('resize', debouncedSave)
+  mainWindow.on('move', debouncedSave)
+  mainWindow.on('maximize', () => { if (mainWindow) saveWindowState(mainWindow) })
+  mainWindow.on('unmaximize', () => { if (mainWindow) saveWindowState(mainWindow) })
 
   // Show window once the Vue app signals it has rendered.
   // 'ready-to-show' fires too early (just the HTML shell), so we wait for
@@ -186,6 +277,19 @@ async function createWindow() {
 
   ipcMain.once('app-ready', showWindow)
   setTimeout(showWindow, 10000) // fallback: show after 10s no matter what
+
+  // Inspect element at coordinates (dev only)
+  ipcMain.on('inspect-element', (_event, x: number, y: number) => {
+    mainWindow?.webContents.inspectElement(x, y)
+  })
+
+  // Show/hide macOS traffic light buttons (close/minimize/fullscreen)
+  // Used to sync traffic lights with sidebar visibility
+  if (isMac) {
+    ipcMain.on('set-traffic-lights-visible', (_event, visible: boolean) => {
+      mainWindow?.setWindowButtonVisibility(visible)
+    })
+  }
 
   // In development, load the Vite dev server URL.
   // In production, start the Nitro server and load from it.
