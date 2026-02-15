@@ -37,7 +37,7 @@ export default defineNuxtConfig({
   nitro: {
     // Native addons can't be bundled by Nitro
     rollupConfig: {
-      external: ['better-sqlite3'],
+      external: ['better-sqlite3', '@xenova/transformers', 'ollama-ai-provider-v2'],
     },
   },
 

@@ -32,11 +32,13 @@
     ]
   },
   "devDependencies": {
+    "@iconify-json/simple-icons": "^1.2.70",
     "@nuxt/eslint": "^1.15.1",
     "@nuxt/fonts": "^0.14.0",
     "@nuxt/kit": "^4.3.1",
     "@nuxt/ui": "^4.0.0",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/pdf-parse": "^1.1.5",
     "drizzle-kit": "^0.31.9",
     "electron": "^34.0.0",
     "electron-builder": "^26.0.0",
@@ -48,8 +50,19 @@
     "vue-tsc": "^2.2.0"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.44",
+    "@ai-sdk/fireworks": "^2.0.34",
+    "@ai-sdk/openai": "^3.0.29",
+    "@ai-sdk/openai-compatible": "^2.0.30",
+    "@ai-sdk/vue": "^3.0.86",
+    "@xenova/transformers": "^2.17.2",
+    "ai": "^6.0.86",
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
+    "jszip": "^3.10.1",
+    "mammoth": "^1.11.0",
+    "ollama-ai-provider-v2": "^3.3.0",
+    "pdf-parse": "^2.4.5",
     "zod": "^4.3.6"
   }
 }

@@ -1,0 +1,361 @@
+<script setup lang="ts">
+definePageMeta({ layout: 'dashboard' })
+
+const route = useRoute()
+const router = useRouter()
+const toast = useToast()
+
+const templateId = route.params.id as string
+const { template, pending, error, refresh } = useTemplate(templateId)
+
+// ─── Delete ──────────────────────────────────────────────────────────────────
+
+const showDeleteModal = ref(false)
+const deleting = ref(false)
+
+async function handleDelete() {
+  if (!template.value) return
+  deleting.value = true
+  try {
+    await deleteTemplate(template.value.id)
+    toast.add({ title: 'Template deleted', color: 'success' })
+    await router.push('/templates')
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to delete', description: message, color: 'error' })
+  }
+  finally {
+    deleting.value = false
+  }
+}
+
+// ─── Edit Name ───────────────────────────────────────────────────────────────
+
+const showEditModal = ref(false)
+const editName = ref('')
+const editDescription = ref('')
+const saving = ref(false)
+
+function openEdit() {
+  if (!template.value) return
+  editName.value = template.value.name
+  editDescription.value = template.value.description || ''
+  showEditModal.value = true
+}
+
+async function handleSave() {
+  if (!template.value || !editName.value.trim()) return
+  saving.value = true
+  try {
+    await updateTemplate(template.value.id, {
+      name: editName.value.trim(),
+      description: editDescription.value.trim(),
+    })
+    showEditModal.value = false
+    await refresh()
+    toast.add({ title: 'Template updated', color: 'success' })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to update', description: message, color: 'error' })
+  }
+  finally {
+    saving.value = false
+  }
+}
+
+// ─── Clear Chat ──────────────────────────────────────────────────────────────
+
+const showClearChatModal = ref(false)
+const clearing = ref(false)
+const chatKey = ref(0)
+
+async function handleClearChat() {
+  if (!template.value) return
+  clearing.value = true
+  try {
+    await updateTemplate(template.value.id, { messages: [] })
+    showClearChatModal.value = false
+    chatKey.value++ // Force re-mount of TemplateChat
+    await refresh()
+    toast.add({ title: 'Chat cleared', color: 'success' })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to clear chat', description: message, color: 'error' })
+  }
+  finally {
+    clearing.value = false
+  }
+}
+
+// ─── Layout ──────────────────────────────────────────────────────────────────
+
+const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
+
+const chatPosition = ref<'left' | 'right'>('left')
+
+function toggleChatPosition() {
+  chatPosition.value = chatPosition.value === 'left' ? 'right' : 'left'
+}
+
+// ─── Data Form ───────────────────────────────────────────────────────────────
+
+const showDataForm = ref(false)
+const showTemplateSource = ref(false)
+
+interface InputField {
+  id: string
+  type: string
+  label: string
+  default?: unknown
+  options?: string[]
+  placeholder?: string
+  required?: boolean
+  min?: number
+  max?: number
+  fields?: InputField[]
+}
+
+const formData = ref<Record<string, unknown>>({})
+
+// Computed input schema typed properly
+const inputFields = computed<InputField[]>(() => (template.value?.inputSchema as InputField[]) || [])
+
+// When the template data changes (initial load or after update_template tool),
+// replace formData with the persisted sampleData from the database.
+// Skip auto-save when this happens (the data just came from the DB).
+let skipNextSave = false
+
+watch(() => template.value?.sampleData, (sampleData) => {
+  if (sampleData && typeof sampleData === 'object') {
+    skipNextSave = true
+    formData.value = { ...sampleData as Record<string, unknown> }
+  }
+}, { immediate: true })
+
+// ─── Auto-save sample data ──────────────────────────────────────────────────
+
+const saveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
+let saveTimeout: ReturnType<typeof setTimeout> | undefined
+let savedTimeout: ReturnType<typeof setTimeout> | undefined
+
+async function persistSampleData() {
+  if (!template.value) return
+  saveStatus.value = 'saving'
+  try {
+    await updateTemplate(template.value.id, { sampleData: formData.value })
+    saveStatus.value = 'saved'
+    // Reset to idle after 2 seconds
+    clearTimeout(savedTimeout)
+    savedTimeout = setTimeout(() => {
+      saveStatus.value = 'idle'
+    }, 2000)
+  }
+  catch {
+    saveStatus.value = 'idle'
+  }
+}
+
+// Debounced save: triggers 1 second after user stops editing
+watch(formData, () => {
+  if (skipNextSave) {
+    skipNextSave = false
+    return
+  }
+  clearTimeout(saveTimeout)
+  saveTimeout = setTimeout(persistSampleData, 1000)
+}, { deep: true })
+
+// ─── Preview Error Feedback ──────────────────────────────────────────────────
+
+function onPreviewError(error: string | null) {
+  if (error) {
+    templateChatRef.value?.reportPreviewError(error)
+  }
+}
+</script>
+
+<template>
+  <div class="flex flex-1 min-w-0">
+    <UDashboardPanel>
+      <template #header>
+        <UDashboardNavbar :title="template?.name || 'Loading...'">
+          <template #leading>
+            <UDashboardSidebarCollapse />
+            <UButton
+              icon="i-lucide-arrow-left"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              to="/templates"
+            />
+          </template>
+          <template #right>
+            <UTooltip text="Swap layout">
+              <UButton
+                :icon="chatPosition === 'left' ? 'i-lucide-panel-right-open' : 'i-lucide-panel-left-open'"
+                color="neutral"
+                variant="ghost"
+                size="sm"
+                @click="toggleChatPosition"
+              />
+            </UTooltip>
+            <UTooltip text="Clear chat">
+              <UButton icon="i-lucide-message-square-x" color="neutral" variant="ghost" size="sm" @click="showClearChatModal = true" />
+            </UTooltip>
+            <UButton icon="i-lucide-pencil" color="neutral" variant="ghost" size="sm" @click="openEdit" />
+            <UButton icon="i-lucide-trash-2" color="error" variant="ghost" size="sm" @click="showDeleteModal = true" />
+          </template>
+        </UDashboardNavbar>
+      </template>
+
+      <template #body>
+        <!-- Loading -->
+        <div v-if="pending" class="flex items-center justify-center py-12">
+          <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
+        </div>
+
+        <!-- Error -->
+        <EmptyState
+          v-else-if="error"
+          icon="i-lucide-alert-circle"
+          title="Template not found"
+          description="This template may have been deleted."
+        >
+          <UButton label="Back to Templates" to="/templates" />
+        </EmptyState>
+
+        <!-- Editor -->
+        <div v-else-if="template" class="flex h-full overflow-hidden" :class="chatPosition === 'right' ? 'flex-row-reverse' : 'flex-row'">
+          <!-- Chat Panel -->
+          <div class="w-[400px] max-w-[400px] shrink-0 border-default flex flex-col overflow-hidden" :class="chatPosition === 'left' ? 'border-r' : 'border-l'">
+            <TemplateChat
+              :key="chatKey"
+              ref="templateChatRef"
+              :template-id="template.id"
+              :initial-messages="(template.messages as any[]) || []"
+              @update="refresh()"
+            />
+          </div>
+
+          <!-- Preview Panel -->
+          <div class="flex-1 min-w-0 flex flex-col">
+            <TemplatePreview
+              :component-source="template.component || ''"
+              :data="formData"
+              :dependencies="(template.dependencies as any[]) || []"
+              :tools="(template.tools as string[]) || []"
+              @error="onPreviewError"
+            />
+            <!-- Data form / template source bar -->
+            <div v-if="template.component || inputFields.length" class="border-t border-default px-4 py-2 flex items-center justify-between bg-elevated/50">
+              <div class="flex items-center gap-2">
+                <span v-if="inputFields.length" class="text-xs text-muted">{{ inputFields.length }} input field{{ inputFields.length === 1 ? '' : 's' }}</span>
+                <!-- Save status indicator -->
+                <Transition
+                  enter-active-class="transition-opacity duration-200"
+                  leave-active-class="transition-opacity duration-300"
+                  enter-from-class="opacity-0"
+                  leave-to-class="opacity-0"
+                >
+                  <span v-if="saveStatus === 'saving'" class="flex items-center gap-1 text-xs text-muted">
+                    <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" />
+                    Saving...
+                  </span>
+                  <span v-else-if="saveStatus === 'saved'" class="flex items-center gap-1 text-xs text-success">
+                    <UIcon name="i-lucide-check" class="size-3" />
+                    Saved
+                  </span>
+                </Transition>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <UButton
+                  v-if="template.component"
+                  icon="i-lucide-code"
+                  label="View Template"
+                  size="xs"
+                  variant="soft"
+                  color="neutral"
+                  @click="showTemplateSource = true"
+                />
+                <UButton
+                  v-if="inputFields.length"
+                  icon="i-lucide-sliders-horizontal"
+                  label="Edit Data"
+                  size="xs"
+                  variant="soft"
+                  color="neutral"
+                  @click="showDataForm = true"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </UDashboardPanel>
+
+    <!-- Edit modal -->
+    <UModal v-model:open="showEditModal">
+      <template #header>
+        <h3 class="text-lg font-semibold">Edit Template</h3>
+      </template>
+      <template #body>
+        <div class="space-y-4">
+          <UFormField label="Name" required>
+            <UInput v-model="editName" placeholder="Template name" autofocus @keydown.enter="handleSave" />
+          </UFormField>
+          <UFormField label="Description">
+            <UTextarea v-model="editDescription" placeholder="Brief description..." :rows="3" />
+          </UFormField>
+        </div>
+      </template>
+      <template #footer>
+        <div class="flex justify-end gap-2">
+          <UButton label="Cancel" color="neutral" variant="ghost" @click="showEditModal = false" />
+          <UButton label="Save" :loading="saving" :disabled="!editName.trim()" @click="handleSave" />
+        </div>
+      </template>
+    </UModal>
+
+    <!-- Delete confirmation -->
+    <ConfirmModal
+      v-model:open="showDeleteModal"
+      title="Delete Template"
+      :description="`Are you sure you want to delete &quot;${template?.name}&quot;? This action cannot be undone.`"
+      confirm-label="Delete"
+      confirm-color="error"
+      :loading="deleting"
+      @confirm="handleDelete"
+    />
+
+    <!-- Clear chat confirmation -->
+    <ConfirmModal
+      v-model:open="showClearChatModal"
+      title="Clear Chat"
+      description="This will clear the conversation history. The template's input schema and component will be preserved."
+      confirm-label="Clear"
+      confirm-color="error"
+      :loading="clearing"
+      @confirm="handleClearChat"
+    />
+
+    <!-- Data form slideover -->
+    <USlideover v-model:open="showDataForm" title="Template Data" description="Edit the data passed to the template preview." side="right">
+      <template #body>
+        <TemplateDataForm
+          v-model="formData"
+          :fields="inputFields"
+        />
+      </template>
+    </USlideover>
+
+    <!-- Template source slideover -->
+    <USlideover v-model:open="showTemplateSource" title="Template Source" description="The Vue component generated for this template." side="right">
+      <template #body>
+        <pre class="text-xs font-mono whitespace-pre-wrap break-words bg-elevated rounded-lg p-4 overflow-auto">{{ template?.component || 'No component generated yet.' }}</pre>
+      </template>
+    </USlideover>
+  </div>
+</template>

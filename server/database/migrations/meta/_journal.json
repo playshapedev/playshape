@@ -8,6 +8,48 @@
       "when": 1771100572965,
       "tag": "0000_puzzling_ravenous",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1771186800000,
+      "tag": "0001_add_libraries",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771114675452,
+      "tag": "0002_add_llm_providers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1771120500476,
+      "tag": "0003_add_templates",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1771130167924,
+      "tag": "0004_add_template_sample_data",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1771134151443,
+      "tag": "0005_add_template_dependencies",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1771139669194,
+      "tag": "0006_add_template_tools",
+      "breakpoints": true
     }
   ]
 }

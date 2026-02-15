@@ -8,6 +8,16 @@ const items: NavigationMenuItem[] = [
     to: '/projects',
   },
   {
+    label: 'Libraries',
+    icon: 'i-lucide-library-big',
+    to: '/libraries',
+  },
+  {
+    label: 'Templates',
+    icon: 'i-lucide-layout-template',
+    to: '/templates',
+  },
+  {
     label: 'Settings',
     icon: 'i-lucide-settings',
     to: '/settings',
@@ -17,6 +27,7 @@ const items: NavigationMenuItem[] = [
 // Detect if running in Electron on macOS (traffic lights need clearance)
 const isElectronMac = ref(false)
 const isElectron = ref(false)
+const sidebarCollapsed = ref(false)
 
 onMounted(() => {
   const electron = (window as unknown as { electron?: { platform?: string } }).electron
@@ -29,11 +40,16 @@ onMounted(() => {
 
 <template>
   <UDashboardGroup>
-    <UDashboardSidebar collapsible resizable>
-      <template #header="{ collapsed }">
-        <div class="titlebar-drag-region" :class="{ 'pt-10': isElectronMac }">
-          <AppLogo :collapsed="collapsed" />
-        </div>
+    <UDashboardSidebar
+      v-model:collapsed="sidebarCollapsed"
+      collapsible
+      resizable
+      :ui="{
+        root: sidebarCollapsed ? 'border-e border-default [border-image:linear-gradient(to_bottom,transparent_var(--ui-header-height),var(--ui-border-default)_var(--ui-header-height))_1]' : undefined,
+      }"
+    >
+      <template #header>
+        <div class="electron-titlebar flex-1" :class="{ 'pt-10': isElectronMac }" />
       </template>
 
       <template #default="{ collapsed }">
@@ -45,21 +61,13 @@ onMounted(() => {
         />
       </template>
 
-      <template #footer>
-        <UColorModeButton />
+      <template #footer="{ collapsed }">
+        <div class="pb-3">
+          <AppLogo :collapsed="collapsed" />
+        </div>
       </template>
     </UDashboardSidebar>
 
     <slot />
   </UDashboardGroup>
 </template>
-
-<style scoped>
-.titlebar-drag-region {
-  -webkit-app-region: drag;
-}
-.titlebar-drag-region :deep(a),
-.titlebar-drag-region :deep(button) {
-  -webkit-app-region: no-drag;
-}
-</style>

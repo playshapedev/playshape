@@ -54,7 +54,7 @@ Playshape is a cross-platform app that empowers learning experience designers (L
 
 | Concern | Technology | Notes |
 |---------|-----------|-------|
-| LLM abstraction | **Vercel AI SDK** (`ai` package) | Unified interface for all providers. Use `@ai-sdk/openai`, `@ai-sdk/anthropic`, and community Ollama provider |
+| LLM abstraction | **Vercel AI SDK** (`ai` v6 package) | Unified interface for all providers. Use `@ai-sdk/openai`, `@ai-sdk/anthropic`, `@ai-sdk/openai-compatible` (for LM Studio), and `ollama-ai-provider-v2` (for Ollama). AI SDK v6 uses `maxOutputTokens` (not `maxTokens`). |
 | Local embeddings | **Transformers.js** (`@xenova/transformers`) | Runs ONNX models in Node.js (desktop) or WASM (mobile). Default model: `all-MiniLM-L6-v2` (384 dimensions). On mobile, consider cloud embedding as an alternative for performance |
 | Structured output | **AI SDK + Zod** | Use `generateObject()` with Zod schemas for type-safe LLM outputs |
 
@@ -124,7 +124,15 @@ All IPC channels are defined as typed contracts in shared types and validated wi
 
 ### LLM Provider Configuration
 
-Users configure LLM providers in settings. Provider configs are stored in the database, but API keys are stored separately using platform-specific secure storage — Electron's `safeStorage` API (OS keychain) on desktop, and the iOS Keychain / Android Keystore via a Capacitor secure storage plugin on mobile. Supported providers include Ollama, LM Studio (desktop only — these require a local server), OpenAI, and Anthropic. Model names are always read from user settings, never hardcoded. On mobile, only cloud-based LLM providers are available since local model servers aren't accessible.
+Users configure multiple LLM providers in settings and mark one as active. Provider configs (type, name, base URL, model) are stored in the `llm_providers` table. API keys are currently stored in the same table; they will be migrated to platform-specific secure storage (Electron `safeStorage` / Capacitor Keychain) once the IPC layer is built.
+
+Supported providers:
+- **Ollama** (`ollama-ai-provider-v2`): Local server, default `http://localhost:11434`. Supports model auto-discovery via `GET /api/tags`.
+- **LM Studio** (`@ai-sdk/openai-compatible`): Local server, default `http://localhost:1234`. Supports model auto-discovery via OpenAI-compatible `GET /v1/models`.
+- **OpenAI** (`@ai-sdk/openai`): Cloud API, requires API key. Curated model suggestions in UI.
+- **Anthropic** (`@ai-sdk/anthropic`): Cloud API, requires API key. Curated model suggestions in UI.
+
+Model names are always read from user settings, never hardcoded in generation code. On mobile, only cloud-based LLM providers are available since local model servers aren't accessible.
 
 ### Embeddings & Semantic Search
 
@@ -158,6 +166,8 @@ Updates are distributed through the App Store and Play Store. Migrations run on 
 
 ## Code Conventions
 
+> **Maintaining this file**: Whenever the user expresses a preference, convention, or architectural decision — whether about code style, tooling, patterns, naming, or workflow — update this AGENTS.md file to capture it. This file is the single source of truth for how the project should be built.
+
 ### General
 
 - **TypeScript everywhere**. Strict mode enabled. No `any` types without explicit justification.
@@ -174,15 +184,16 @@ Updates are distributed through the App Store and Play Store. Migrations run on 
 
 ### Database
 
-- Always use Drizzle's query builder — never raw SQL strings except for sqlite-vec KNN queries.
+- Always use Drizzle's query builder — never raw SQL strings except for sqlite-vec KNN queries and simple connectivity checks (e.g. `SELECT 1`). For aggregations use Drizzle's `count()`, `sum()`, etc. with `leftJoin`/`groupBy` instead of raw SQL subqueries. Drizzle's `sql` template literals do not reliably correlate table references inside subqueries.
 - JSON columns: Always validate with Zod before writing, parse with Zod after reading.
 - Timestamps: Store as Unix integers (Drizzle's timestamp mode).
 - IDs: Use `crypto.randomUUID()` for all primary keys.
+- **Migrations**: NEVER create migration SQL files manually. Always use `npx drizzle-kit generate --name <migration_name>` to generate migrations. Drizzle's migrator reads `meta/_journal.json` to discover migrations — manually created `.sql` files without a journal entry and snapshot will be silently ignored. The correct workflow: (1) update the schema in `server/database/schema.ts`, (2) run `npx drizzle-kit generate --name <descriptive_name>`, (3) verify the generated SQL and journal entry.
 
 ### LLM Integration
 
 - Always use AI SDK's `generateObject()` with a Zod schema when expecting structured output.
-- Always set reasonable `maxTokens` limits.
+- Always set reasonable `maxOutputTokens` limits (AI SDK v6 renamed `maxTokens` to `maxOutputTokens`).
 - Stream responses for long-form content generation using `streamText()`.
 - Catch and surface provider-specific errors gracefully (model not found, rate limits, connection refused for local models).
 - Never hardcode model names — always read from user settings.
@@ -236,6 +247,52 @@ The core workflow for generating a practice activity:
 - Custom element (`<playshape-activity>`) that can be dropped into any web page
 - Shadow DOM for style isolation
 - Attribute-based configuration
+
+---
+
+## Templates System
+
+Templates are reusable activity blueprints created through AI-assisted conversation. Each template has:
+
+1. **Input schema** — JSON array of field definitions (`text`, `textarea`, `dropdown`, `checkbox`, `number`, `color`) that parameterize the activity
+2. **Vue 3 component** — A single-file component (stored as a string) that renders the activity using the input data as props
+3. **Chat history** — The conversation messages are persisted so users can resume editing
+
+### Template Editor Architecture
+
+The editor page (`/templates/:id`) is a two-panel layout:
+- **Chat panel** (left by default, swappable) — AI conversation with tool-based interactions
+- **Preview panel** — Renders the Vue SFC in a sandboxed iframe
+
+### AI Chat Tools
+
+The chat uses AI SDK `streamText()` with two tools:
+
+- **`ask_question`** — Prompts the user with structured multiple-choice buttons. When called, the text input is completely hidden and replaced with clickable option buttons. Keyboard shortcuts (1-9) allow fast selection.
+- **`update_template`** — Provides the template output (input schema + Vue SFC). Automatically persists to the database and updates the preview.
+
+### Template Conventions
+
+- Templates are top-level entities (not scoped to a project)
+- All Vue components use `<script setup lang="ts">` with Composition API
+- Components receive a `data` prop with keys matching the input schema field IDs
+- Styling uses Tailwind CSS utility classes — components must be self-contained
+- Chat conversations are persisted to the template's `messages` JSON column
+- AI chat does NOT auto-initiate — the user sends the first message
+- The chat/preview layout is swappable left/right via a toggle button
+
+### AI SDK v6 Conventions
+
+- `tool()` uses `inputSchema` (not `parameters`) for the Zod schema
+- `streamText()` uses `stopWhen: stepCountIs(N)` instead of `maxSteps`
+- `result.toUIMessageStreamResponse()` replaces `toDataStreamResponse()`
+- `maxOutputTokens` (not `maxTokens`) for generation limits
+- **Nuxt streaming routes**: Must use `defineLazyEventHandler(() => defineEventHandler(...))` — a plain `defineEventHandler` returning a web `Response` from `toUIMessageStreamResponse()` causes Nitro to buffer the response instead of streaming
+- **`Chat` class** from `@ai-sdk/vue`: Use `new Chat({ messages, transport: new DefaultChatTransport({ api: '/api/...' }) })`. The `api` option is on the transport
+- **Tool parts structure**: In v6, `ToolUIPart` has `toolCallId`, `state`, `input`, and `output` directly on the part object — there is NO `toolInvocation` wrapper property. Access tool args via `part.input`, not `part.toolInvocation.args`
+- **Tool part types**: Named `tool-{toolName}` (e.g., `tool-ask_question`, `tool-update_template`)
+- **Tool part states**: `'input-streaming'`, `'input-available'`, `'output-available'`, `'output-error'`
+- **Client-side tools** (no `execute`): Define `tool()` without `execute` — the LLM generates tool call args but execution happens on the client. With `stopWhen`, the stream ends after the tool call step
 
 ---
 

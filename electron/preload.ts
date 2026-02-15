@@ -17,10 +17,13 @@ contextBridge.exposeInMainWorld('electron', {
 // Mark the platform on <html> so CSS can apply platform-specific styles
 // (e.g. titlebar inset for macOS hiddenInset title bar).
 // This runs before the page renders, avoiding layout shift.
-if (process.platform === 'darwin') {
-  document.documentElement.classList.add('electron-mac')
+// Guard against null documentElement (can happen if preload runs before DOM is ready).
+if (document.documentElement) {
+  if (process.platform === 'darwin') {
+    document.documentElement.classList.add('electron-mac')
+  }
+  else if (process.platform === 'win32') {
+    document.documentElement.classList.add('electron-win')
+  }
+  document.documentElement.classList.add('electron')
 }
-else if (process.platform === 'win32') {
-  document.documentElement.classList.add('electron-win')
-}
-document.documentElement.classList.add('electron')

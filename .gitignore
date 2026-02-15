@@ -11,6 +11,7 @@ dist/
 
 # Database
 data/
+*.db
 
 # Build
 .cache/
