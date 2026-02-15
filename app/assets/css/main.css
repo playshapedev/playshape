@@ -23,14 +23,96 @@
   --color-playshape-900: #2e3086;
   --color-playshape-950: #1c1a5e;
 
-  /* Brand accent colors — available as utilities (e.g. text-brand-yellow) */
-  --color-brand-yellow: #FFCA00;
-  --color-brand-green: #90D20E;
-  --color-brand-blue: #24ACFF;
-  --color-brand-pink: #FF467C;
-  --color-brand-orange: #FBA304;
-  --color-brand-violet: #9F46EB;
-  --color-brand-red: #FF0045;
+  /* Brand Yellow — anchor #FFCA00 */
+  --color-brand-yellow-50: #fffbeb;
+  --color-brand-yellow-100: #fff3c6;
+  --color-brand-yellow-200: #ffe688;
+  --color-brand-yellow-300: #ffd54a;
+  --color-brand-yellow-400: #ffca00;
+  --color-brand-yellow-500: #f0b400;
+  --color-brand-yellow-600: #cc8d00;
+  --color-brand-yellow-700: #a16602;
+  --color-brand-yellow-800: #854f0a;
+  --color-brand-yellow-900: #71410d;
+  --color-brand-yellow-950: #422102;
+
+  /* Brand Green — anchor #90D20E */
+  --color-brand-green-50: #f5fee7;
+  --color-brand-green-100: #e8fdcb;
+  --color-brand-green-200: #d2fa9d;
+  --color-brand-green-300: #b3f264;
+  --color-brand-green-400: #96e534;
+  --color-brand-green-500: #90d20e;
+  --color-brand-green-600: #5ca806;
+  --color-brand-green-700: #467f09;
+  --color-brand-green-800: #39640e;
+  --color-brand-green-900: #315510;
+  --color-brand-green-950: #172f03;
+
+  /* Brand Blue — anchor #24ACFF */
+  --color-brand-blue-50: #eff8ff;
+  --color-brand-blue-100: #dbeffe;
+  --color-brand-blue-200: #bfe4fe;
+  --color-brand-blue-300: #93d4fd;
+  --color-brand-blue-400: #24acff;
+  --color-brand-blue-500: #1a93e6;
+  --color-brand-blue-600: #0d74c4;
+  --color-brand-blue-700: #0e5d9f;
+  --color-brand-blue-800: #124f83;
+  --color-brand-blue-900: #14436d;
+  --color-brand-blue-950: #0d2b48;
+
+  /* Brand Pink — anchor #FF467C */
+  --color-brand-pink-50: #fff1f3;
+  --color-brand-pink-100: #ffe0e6;
+  --color-brand-pink-200: #ffc6d3;
+  --color-brand-pink-300: #ff9db2;
+  --color-brand-pink-400: #ff6d8c;
+  --color-brand-pink-500: #ff467c;
+  --color-brand-pink-600: #ed1153;
+  --color-brand-pink-700: #c80a44;
+  --color-brand-pink-800: #a80c3e;
+  --color-brand-pink-900: #8f0e3a;
+  --color-brand-pink-950: #50021a;
+
+  /* Brand Orange — anchor #FBA304 */
+  --color-brand-orange-50: #fffaeb;
+  --color-brand-orange-100: #fff0c6;
+  --color-brand-orange-200: #ffde88;
+  --color-brand-orange-300: #ffc84a;
+  --color-brand-orange-400: #fbb520;
+  --color-brand-orange-500: #fba304;
+  --color-brand-orange-600: #df7a02;
+  --color-brand-orange-700: #b95506;
+  --color-brand-orange-800: #96420c;
+  --color-brand-orange-900: #7b370d;
+  --color-brand-orange-950: #471b02;
+
+  /* Brand Violet — anchor #9F46EB */
+  --color-brand-violet-50: #f5f1ff;
+  --color-brand-violet-100: #ede5ff;
+  --color-brand-violet-200: #ddcfff;
+  --color-brand-violet-300: #c5a8ff;
+  --color-brand-violet-400: #ab76ff;
+  --color-brand-violet-500: #9f46eb;
+  --color-brand-violet-600: #8425d5;
+  --color-brand-violet-700: #7019b3;
+  --color-brand-violet-800: #5f1893;
+  --color-brand-violet-900: #4f1578;
+  --color-brand-violet-950: #320a52;
+
+  /* Brand Red — anchor #FF0045 */
+  --color-brand-red-50: #fff0f1;
+  --color-brand-red-100: #ffdde1;
+  --color-brand-red-200: #ffc1c9;
+  --color-brand-red-300: #ff94a3;
+  --color-brand-red-400: #ff566e;
+  --color-brand-red-500: #ff0045;
+  --color-brand-red-600: #e20033;
+  --color-brand-red-700: #bf002c;
+  --color-brand-red-800: #9d0329;
+  --color-brand-red-900: #830828;
+  --color-brand-red-950: #480010;
 }
 
 /*
@@ -173,3 +255,39 @@ html.electron .sidebar-overlay {
   transform: translateX(0) !important;
   box-shadow: var(--shadow-xl);
 }
+
+/*
+ * ── Chat Prose ────────────────────────────────────────────────────────────────
+ * Compact typography for MDC-rendered markdown inside chat message bubbles.
+ * Scoped to .chat-prose so it doesn't affect prose elsewhere in the app.
+ */
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3,
+.chat-prose h4 { color: var(--color-playshape-700); }
+.dark .chat-prose h1,
+.dark .chat-prose h2,
+.dark .chat-prose h3,
+.dark .chat-prose h4 { color: var(--color-playshape-300); }
+
+.chat-prose h1 { font-size: 1.1em; margin: 0.5em 0 0.25em; }
+.chat-prose h2 { font-size: 1em; margin: 0.5em 0 0.25em; }
+.chat-prose h3 { font-size: 0.95em; margin: 0.4em 0 0.2em; }
+.chat-prose h4 { font-size: 0.9em; margin: 0.4em 0 0.2em; }
+
+.chat-prose p { margin: 0.3em 0; }
+
+.chat-prose ul,
+.chat-prose ol { margin: 0.25em 0; padding-left: 1.25em; }
+.chat-prose li { margin: 0.1em 0; }
+.chat-prose ul { list-style-type: disc; }
+.chat-prose ol { list-style-type: decimal; }
+
+.chat-prose pre { margin: 0.4em 0; padding: 0.5em 0.75em; border-radius: 0.325rem; overflow-x: auto; font-size: 0.85em; background: var(--ui-bg-accented); }
+.chat-prose code:not(pre code) { font-size: 0.85em; padding: 0.1em 0.3em; border-radius: 0.2rem; background: var(--ui-bg-accented); }
+
+.chat-prose blockquote { margin: 0.4em 0; padding-left: 0.75em; border-left: 2px solid var(--ui-border-accented); color: var(--ui-text-muted); }
+
+.chat-prose hr { margin: 0.5em 0; border-color: var(--ui-border); }
+
+.chat-prose a { color: var(--ui-primary); text-decoration: underline; }

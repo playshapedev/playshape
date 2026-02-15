@@ -55,6 +55,7 @@
     "@ai-sdk/openai": "^3.0.29",
     "@ai-sdk/openai-compatible": "^2.0.30",
     "@ai-sdk/vue": "^3.0.86",
+    "@nuxtjs/mdc": "^0.20.1",
     "@xenova/transformers": "^2.17.2",
     "ai": "^6.0.86",
     "better-sqlite3": "^12.6.2",

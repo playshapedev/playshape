@@ -18,8 +18,46 @@ const emit = defineEmits<{
 
 const { getTools, getToolHeadHtml, getToolSetupJs } = useActivityTools()
 
+const colorMode = useColorMode()
+const appIsDark = computed(() => colorMode.value === 'dark')
+
+// Preview dark mode: follows app by default, can be independently toggled.
+// null = follow app, true/false = independent override.
+const PREVIEW_DARK_KEY = 'playshape:preview-dark-mode'
+const previewDarkOverride = ref<boolean | null>(
+  typeof localStorage !== 'undefined'
+    ? (() => { const v = localStorage.getItem(PREVIEW_DARK_KEY); return v === null ? null : v === 'true' })()
+    : null,
+)
+
+const previewIsDark = computed(() =>
+  previewDarkOverride.value !== null ? previewDarkOverride.value : appIsDark.value,
+)
+
+const isFollowingApp = computed(() => previewDarkOverride.value === null)
+
+function togglePreviewDark() {
+  // Toggle to the opposite of the current effective state
+  const next = !previewIsDark.value
+  previewDarkOverride.value = next
+  localStorage.setItem(PREVIEW_DARK_KEY, String(next))
+  syncThemeToIframe(next)
+}
+
+function resetToFollowApp() {
+  previewDarkOverride.value = null
+  localStorage.removeItem(PREVIEW_DARK_KEY)
+  syncThemeToIframe(appIsDark.value)
+}
+
+function syncThemeToIframe(dark: boolean) {
+  if (!iframeRef.value?.contentWindow) return
+  iframeRef.value.contentWindow.postMessage({ type: 'theme', dark }, '*')
+}
+
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const iframeReady = ref(false)
+const iframeFocused = ref(false)
 const previewError = ref<string | null>(null)
 
 /**
@@ -68,7 +106,7 @@ const toolModuleMappings = computed(() => {
 })
 
 const iframeSrcdoc = computed(() => `<!DOCTYPE html>
-<html>
+<html class="${previewIsDark.value ? 'dark' : ''}" style="color-scheme: ${previewIsDark.value ? 'dark' : 'light'}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -86,7 +124,7 @@ ${dependencyScriptTags.value}
   <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader@0.9.5/dist/vue3-sfc-loader.js"><\/script>
 ${toolHeadHtml.value}
   <style>
-    body { margin: 0; padding: 16px; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
+    body { margin: 0; padding: 0; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
     #app { min-height: 100vh; }
     .preview-error { color: #ef4444; padding: 16px; font-size: 14px; white-space: pre-wrap; font-family: monospace; }
     .preview-empty { display: flex; align-items: center; justify-content: center; height: 100vh; color: #9ca3af; font-size: 14px; }
@@ -189,6 +227,7 @@ ${toolHeadHtml.value}
   <script>
     // Configure Tailwind CDN to recognize design token utilities
     tailwind.config = {
+      darkMode: 'class',
       theme: {
         extend: {
           colors: {
@@ -324,6 +363,11 @@ ${toolSetupJs.value}
         if (event.data.depMappings) depMappings = event.data.depMappings;
         mountComponent(event.data.sfc, event.data.data || {});
       }
+      else if (event.data?.type === 'theme') {
+        var isDark = event.data.dark;
+        document.documentElement.classList.toggle('dark', isDark);
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+      }
     });
 
     // Signal that the iframe is ready
@@ -348,8 +392,37 @@ function onIframeMessage(event: MessageEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('message', onIframeMessage))
-onUnmounted(() => window.removeEventListener('message', onIframeMessage))
+// Track iframe focus: when the user clicks into the iframe, the parent window
+// fires 'blur'. When they click back out, the parent fires 'focus'.
+function onWindowBlur() {
+  // Check if focus moved to our iframe (not another window/tab)
+  if (document.activeElement === iframeRef.value) {
+    iframeFocused.value = true
+  }
+}
+function onWindowFocus() {
+  iframeFocused.value = false
+}
+
+// When the user explicitly changes their app theme in settings,
+// reset the preview override so it follows the new theme.
+function onThemeReset() {
+  previewDarkOverride.value = null
+  syncThemeToIframe(appIsDark.value)
+}
+
+onMounted(() => {
+  window.addEventListener('message', onIframeMessage)
+  window.addEventListener('blur', onWindowBlur)
+  window.addEventListener('focus', onWindowFocus)
+  window.addEventListener('playshape:theme-reset', onThemeReset)
+})
+onUnmounted(() => {
+  window.removeEventListener('message', onIframeMessage)
+  window.removeEventListener('blur', onWindowBlur)
+  window.removeEventListener('focus', onWindowFocus)
+  window.removeEventListener('playshape:theme-reset', onThemeReset)
+})
 
 /**
  * Send the current SFC source and data to the iframe for rendering.
@@ -379,6 +452,12 @@ watch(() => [props.componentSource, props.data], () => {
     sendUpdate()
   }
 }, { deep: true })
+
+// When following app, sync dark mode changes to iframe
+watch(appIsDark, (dark) => {
+  if (previewDarkOverride.value !== null) return // independent, don't sync
+  syncThemeToIframe(dark)
+})
 </script>
 
 <template>
@@ -388,8 +467,6 @@ watch(() => [props.componentSource, props.data], () => {
       <div class="flex items-center gap-2 text-sm text-muted">
         <UIcon name="i-lucide-eye" class="size-4" />
         <span>Preview</span>
-      </div>
-      <div class="flex items-center gap-1">
         <UBadge
           v-if="previewError"
           color="error"
@@ -398,12 +475,32 @@ watch(() => [props.componentSource, props.data], () => {
           size="xs"
         />
         <UBadge
-          v-else-if="componentSource"
+          v-else-if="componentSource && iframeFocused"
           color="success"
           variant="subtle"
-          label="Live"
+          label="Active"
           size="xs"
         />
+        <UBadge
+          v-else-if="componentSource"
+          color="neutral"
+          variant="subtle"
+          label="Inactive"
+          size="xs"
+        />
+      </div>
+      <div class="flex items-center gap-1">
+        <slot name="header-actions" />
+        <UTooltip :text="isFollowingApp ? 'Following app theme' : (previewIsDark ? 'Dark (independent)' : 'Light (independent)')">
+          <UButton
+            :icon="previewIsDark ? 'i-lucide-moon' : 'i-lucide-sun'"
+            size="xs"
+            variant="ghost"
+            :color="isFollowingApp ? 'neutral' : 'primary'"
+            @click="togglePreviewDark"
+            @dblclick.prevent="resetToFollowApp"
+          />
+        </UTooltip>
         <UButton
           v-if="componentSource"
           icon="i-lucide-refresh-cw"

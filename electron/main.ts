@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, nativeImage, net, screen, utilityProcess } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeImage, nativeTheme, net, screen, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
@@ -220,7 +220,8 @@ async function createWindow() {
     title: 'Playshape',
     icon,
     show: false,
-    backgroundColor: '#2E3086',
+    // Match the app's --ui-bg: white in light mode, playshape-900 in dark mode
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#2e3086' : '#ffffff',
 
     // Native-feeling title bar:
     // macOS: hidden inset keeps traffic lights but removes the chrome title bar,
@@ -229,8 +230,8 @@ async function createWindow() {
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
     ...(process.platform === 'win32' && {
       titleBarOverlay: {
-        color: '#2E3086',
-        symbolColor: '#ffffff',
+        color: nativeTheme.shouldUseDarkColors ? '#2e3086' : '#ffffff',
+        symbolColor: nativeTheme.shouldUseDarkColors ? '#ffffff' : '#0f172a',
         height: 40,
       },
     }),

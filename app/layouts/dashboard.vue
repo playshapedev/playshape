@@ -16,6 +16,9 @@ const sidebarItems: NavigationMenuItem[] = navigation.map(item => ({
 // ── Navbar: resolve current page from navigation structure ──────────────────
 const { titleOverride, tabsOverride, setTitle, setTabs } = useNavbar()
 
+// Pages can set `noPadding: true` in definePageMeta to remove body padding.
+const noPadding = computed(() => !!route.meta.noPadding)
+
 const navItem = computed(() => resolveNavItem(route.path))
 const navTitle = computed(() => titleOverride.value ?? navItem.value.item?.title ?? '')
 const navParent = computed(() => navItem.value.parent)
@@ -367,7 +370,7 @@ watch(sidebarVisible, (visible) => {
 
     <!-- Main content area with navbar -->
     <div class="flex flex-1 min-w-0">
-      <UDashboardPanel>
+      <UDashboardPanel :ui="noPadding ? { body: 'p-0 sm:p-0 gap-0 sm:gap-0' } : undefined">
         <template #header>
           <UDashboardNavbar :title="navTitle" :toggle="false" :ui="navTabs.length ? { root: 'border-b-0' } : undefined">
             <template #leading>

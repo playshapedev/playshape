@@ -218,12 +218,13 @@ watch(() => chat.messages.length, (count) => {
           <div
             class="max-w-[85%] min-w-0 rounded-lg px-3 py-2 text-sm break-words overflow-hidden"
             :class="msg.role === 'user'
-              ? 'bg-primary text-white'
-              : 'bg-elevated'"
+              ? 'bg-brand-orange-700 text-white'
+              : 'bg-elevated dark:bg-playshape-800/60'"
           >
             <template v-for="(part, i) in msg.parts" :key="`${msg.id}-${part.type}-${i}`">
               <!-- Text -->
-              <p v-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
+              <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
+              <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
 
               <!-- Template update: in progress -->
               <div
@@ -370,13 +371,16 @@ watch(() => chat.messages.length, (count) => {
 
     <!-- Text input (hidden when question is pending) -->
     <div v-else class="border-t border-default p-4">
-      <div class="flex gap-2">
-        <UInput
+      <div class="flex items-end gap-2">
+        <UTextarea
           v-model="input"
           placeholder="Describe your activity..."
           class="flex-1"
+          autoresize
+          :rows="1"
+          :maxrows="6"
           :disabled="isRunning"
-          @keydown.enter="handleSend"
+          @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="isRunning && stopGeneration()"
         />
         <!-- Stop button while running -->

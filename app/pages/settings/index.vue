@@ -1,4 +1,11 @@
 <script setup lang="ts">
+function onThemeChange(value: string) {
+  const colorMode = useColorMode()
+  colorMode.preference = value
+  // Reset any independent preview dark mode override so it follows the new theme
+  localStorage.removeItem('playshape:preview-dark-mode')
+  window.dispatchEvent(new CustomEvent('playshape:theme-reset'))
+}
 </script>
 
 <template>
@@ -18,7 +25,7 @@
         ]"
         value-key="value"
         class="w-48"
-        @update:model-value="$colorMode.preference = $event"
+        @update:model-value="onThemeChange"
       />
     </UFormField>
   </div>

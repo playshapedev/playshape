@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard' })
+definePageMeta({ layout: 'dashboard', noPadding: true })
 
 const route = useRoute()
 const router = useRouter()
@@ -100,10 +100,57 @@ async function handleClearChat() {
 
 const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
 
-const chatPosition = ref<'left' | 'right'>('left')
+const chatPosition = ref<'left' | 'right'>(
+  (typeof localStorage !== 'undefined' && localStorage.getItem('playshape:template-chat-position') as 'left' | 'right') || 'left',
+)
 
 function toggleChatPosition() {
   chatPosition.value = chatPosition.value === 'left' ? 'right' : 'left'
+  localStorage.setItem('playshape:template-chat-position', chatPosition.value)
+}
+
+// ─── Resizable Panels ────────────────────────────────────────────────────────
+
+const STORAGE_KEY = 'playshape:template-chat-width'
+const DEFAULT_CHAT_PCT = 30 // percentage
+const MIN_CHAT_PCT = 20
+const MAX_CHAT_PCT = 60
+
+const containerRef = ref<HTMLElement | null>(null)
+const chatWidthPct = ref(
+  parseFloat(typeof localStorage !== 'undefined' ? localStorage.getItem(STORAGE_KEY) || '' : '') || DEFAULT_CHAT_PCT,
+)
+
+const isDragging = ref(false)
+
+function onResizeStart(e: PointerEvent) {
+  e.preventDefault()
+  isDragging.value = true
+
+  const container = containerRef.value
+  if (!container) return
+
+  const onMove = (ev: PointerEvent) => {
+    const rect = container.getBoundingClientRect()
+    let pct: number
+    if (chatPosition.value === 'left') {
+      pct = ((ev.clientX - rect.left) / rect.width) * 100
+    }
+    else {
+      pct = ((rect.right - ev.clientX) / rect.width) * 100
+    }
+    chatWidthPct.value = Math.min(MAX_CHAT_PCT, Math.max(MIN_CHAT_PCT, pct))
+  }
+
+  const onUp = () => {
+    isDragging.value = false
+    localStorage.setItem(STORAGE_KEY, chatWidthPct.value.toFixed(1))
+    document.removeEventListener('pointermove', onMove)
+    document.removeEventListener('pointerup', onUp)
+  }
+
+  document.addEventListener('pointermove', onMove)
+  document.addEventListener('pointerup', onUp)
 }
 
 // ─── Data Form ───────────────────────────────────────────────────────────────
@@ -236,9 +283,20 @@ function onPreviewError(error: string | null) {
   </EmptyState>
 
   <!-- Editor -->
-  <div v-else-if="template" class="flex h-full overflow-hidden" :class="chatPosition === 'right' ? 'flex-row-reverse' : 'flex-row'">
+  <div
+    v-else-if="template"
+    ref="containerRef"
+    class="flex h-full overflow-hidden"
+    :class="[
+      chatPosition === 'right' ? 'flex-row-reverse' : 'flex-row',
+      isDragging ? 'select-none' : '',
+    ]"
+  >
     <!-- Chat Panel -->
-    <div class="w-[400px] max-w-[400px] shrink-0 border-default flex flex-col overflow-hidden" :class="chatPosition === 'left' ? 'border-r' : 'border-l'">
+    <div
+      class="shrink-0 flex flex-col overflow-hidden"
+      :style="{ width: chatWidthPct + '%' }"
+    >
       <TemplateChat
         :key="chatKey"
         ref="templateChatRef"
@@ -248,19 +306,26 @@ function onPreviewError(error: string | null) {
       />
     </div>
 
+    <!-- Resize Handle -->
+    <div
+      class="shrink-0 w-px border-l border-default relative group cursor-col-resize hover:border-primary active:border-primary transition-colors"
+      @pointerdown="onResizeStart"
+    >
+      <div class="absolute inset-y-0 -left-1 -right-1" />
+    </div>
+
     <!-- Preview Panel -->
-    <div class="flex-1 min-w-0 flex flex-col">
+    <div class="flex-1 min-w-0 flex flex-col relative">
+      <!-- Drag overlay: prevents the iframe from stealing pointer events during resize -->
+      <div v-if="isDragging" class="absolute inset-0 z-10" />
       <TemplatePreview
         :component-source="template.component || ''"
         :data="formData"
         :dependencies="(template.dependencies as any[]) || []"
         :tools="(template.tools as string[]) || []"
         @error="onPreviewError"
-      />
-      <!-- Data form / template source bar -->
-      <div v-if="template.component || inputFields.length" class="border-t border-default px-4 py-2 flex items-center justify-between bg-elevated/50">
-        <div class="flex items-center gap-2">
-          <span v-if="inputFields.length" class="text-xs text-muted">{{ inputFields.length }} input field{{ inputFields.length === 1 ? '' : 's' }}</span>
+      >
+        <template #header-actions>
           <!-- Save status indicator -->
           <Transition
             enter-active-class="transition-opacity duration-200"
@@ -277,28 +342,24 @@ function onPreviewError(error: string | null) {
               Saved
             </span>
           </Transition>
-        </div>
-        <div class="flex items-center gap-1.5">
           <UButton
             v-if="template.component"
             icon="i-lucide-code"
-            label="View Template"
             size="xs"
-            variant="soft"
+            variant="ghost"
             color="neutral"
             @click="showTemplateSource = true"
           />
           <UButton
             v-if="inputFields.length"
             icon="i-lucide-sliders-horizontal"
-            label="Edit Data"
             size="xs"
-            variant="soft"
+            variant="ghost"
             color="neutral"
             @click="showDataForm = true"
           />
-        </div>
-      </div>
+        </template>
+      </TemplatePreview>
     </div>
   </div>
 
