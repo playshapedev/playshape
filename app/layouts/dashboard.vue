@@ -56,6 +56,13 @@ watch(() => route.path, () => {
     setTabs(null)
   }
   lastBasePath = currentBase
+
+  // Close the unpinned overlay sidebar on navigation (lg+ only).
+  // The small viewport slideover auto-closes via DashboardSidebar's own route watcher.
+  if (!isSmallViewport.value && !sidebarPinned.value && sidebarHovered.value) {
+    sidebarHovered.value = false
+    clearHideTimeout()
+  }
 })
 
 // ── Responsive: track viewport size ─────────────────────────────────────────
@@ -277,11 +284,17 @@ const toggleIcon = computed(() => {
   return sidebarPinned.value ? 'i-lucide-panel-left-close' : 'i-lucide-panel-left-open'
 })
 
-// ── macOS traffic lights ────────────────────────────────────────────────────
+// ── Sidebar visibility ──────────────────────────────────────────────────────
 const sidebarVisible = computed(() => {
   if (isSmallViewport.value) return sidebarOpen.value
   return sidebarPinned.value || sidebarHovered.value
 })
+
+// Provide sidebar visibility so child components (e.g. ProviderSwitcher) can
+// react when the sidebar hides — closing menus, dropdowns, etc.
+provide('sidebarVisible', sidebarVisible)
+
+// ── macOS traffic lights ────────────────────────────────────────────────────
 
 let trafficLightTimeout: ReturnType<typeof setTimeout> | null = null
 

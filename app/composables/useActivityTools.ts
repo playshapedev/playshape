@@ -48,13 +48,16 @@ const ACTIVITY_TOOLS: ActivityTool[] = [
     setup: `
       window.MonacoEnvironment = {
         getWorkerUrl: function (moduleId, label) {
-          const base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs';
-          const workerMain = base + '/base/worker/workerMain.js';
-          // Use a data URI that imports the real worker from CDN
-          const blob = new Blob(
-            ['importScripts("' + workerMain + '")'],
-            { type: 'application/javascript' }
-          );
+          var base = 'https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min';
+          // The worker uses AMD require with relative paths (e.g. ../../../vs/language/typescript/tsWorker).
+          // In a blob: URL context these relative fetches fail because there is no base path.
+          // Fix: set self.MonacoEnvironment.baseUrl inside the worker before loading workerMain.js
+          // so the AMD loader resolves modules against the CDN, not the blob origin.
+          var workerCode = [
+            'self.MonacoEnvironment = { baseUrl: "' + base + '/" };',
+            'importScripts("' + base + '/vs/base/worker/workerMain.js");'
+          ].join('\\n');
+          var blob = new Blob([workerCode], { type: 'application/javascript' });
           return URL.createObjectURL(blob);
         }
       };

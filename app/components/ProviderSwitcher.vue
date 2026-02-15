@@ -7,6 +7,14 @@ defineProps<{
 
 const toast = useToast()
 
+// Close dropdown when sidebar hides
+const dropdownOpen = ref(false)
+const sidebarVisible = inject<Ref<boolean>>('sidebarVisible', ref(true))
+
+watch(sidebarVisible, (visible) => {
+  if (!visible) dropdownOpen.value = false
+})
+
 const { providers, pending, refresh } = useLLMProviders()
 
 const activeProvider = computed(() =>
@@ -45,7 +53,7 @@ const menuItems = computed(() => {
     [{
       label: 'Manage Providers',
       icon: 'i-lucide-settings',
-      onSelect: () => navigateTo('/settings'),
+      onSelect: () => navigateTo('/settings/providers'),
     }],
   ]
 })
@@ -76,7 +84,7 @@ async function switchProvider(provider: LLMProvider) {
     <!-- No providers configured -->
     <NuxtLink
       v-if="!pending && !providers?.length"
-      to="/settings"
+      to="/settings/providers"
       class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted hover:bg-elevated transition-colors min-w-0"
     >
       <UIcon name="i-lucide-bot" class="size-4 shrink-0" />
@@ -84,7 +92,7 @@ async function switchProvider(provider: LLMProvider) {
     </NuxtLink>
 
     <!-- Provider switcher -->
-    <UDropdownMenu v-else-if="providers?.length" :items="menuItems">
+    <UDropdownMenu v-else-if="providers?.length" v-model:open="dropdownOpen" :items="menuItems">
       <button
         class="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs hover:bg-elevated transition-colors cursor-pointer min-w-0"
         :class="collapsed ? 'justify-center' : ''"

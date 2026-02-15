@@ -72,6 +72,14 @@ const iframeSrcdoc = computed(() => `<!DOCTYPE html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script>
+    // Suppress Tailwind CDN production warning before it loads
+    var _origWarn = console.warn;
+    console.warn = function() {
+      if (typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') !== -1) return;
+      _origWarn.apply(console, arguments);
+    };
+  <\/script>
   <script src="https://cdn.tailwindcss.com"><\/script>
 ${dependencyScriptTags.value}
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>
@@ -244,13 +252,6 @@ ${toolHeadHtml.value}
 <body>
   <div id="app"></div>
   <script>
-    // Suppress Tailwind CDN production warning — this is a sandboxed preview, not production
-    const _origWarn = console.warn;
-    console.warn = function(...args) {
-      if (typeof args[0] === 'string' && args[0].includes('cdn.tailwindcss.com')) return;
-      _origWarn.apply(console, args);
-    };
-
     // Activity tool setup (configures tools before they are used)
 ${toolSetupJs.value}
 
