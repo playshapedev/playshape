@@ -193,6 +193,7 @@ export interface TemplateMessage {
 export const brands = sqliteTable('brands', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
+  isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
   primaryColor: text('primary_color').notNull().default('#7458f5'),
   neutralColor: text('neutral_color').notNull().default('#64748b'),
   accentColor: text('accent_color').notNull().default('#3b82f6'),

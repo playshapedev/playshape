@@ -29,22 +29,25 @@ defineProps<{
         <!-- Text -->
         <p v-if="part.type === 'text'" class="whitespace-pre-wrap">{{ part.text }}</p>
 
-        <!-- Template update: in progress -->
+        <!-- Template update/patch: in progress -->
         <div
-          v-else-if="part.type === 'tool-update_template' && 'state' in part && ((part as any).state === 'input-available' || (part as any).state === 'input-streaming')"
+          v-else-if="(part.type === 'tool-update_template' || part.type === 'tool-patch_component') && 'state' in part && ((part as any).state === 'input-available' || (part as any).state === 'input-streaming')"
           class="flex items-center gap-1.5 text-xs text-muted mt-1"
         >
           <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-          Updating template...
+          {{ part.type === 'tool-patch_component' ? 'Patching component...' : 'Updating template...' }}
         </div>
 
-        <!-- Template update: complete -->
+        <!-- Template update/patch: complete -->
         <div
-          v-else-if="part.type === 'tool-update_template' && 'state' in part && (part as any).state === 'output-available'"
+          v-else-if="(part.type === 'tool-update_template' || part.type === 'tool-patch_component') && 'state' in part && (part as any).state === 'output-available'"
           class="flex items-center gap-1.5 text-xs text-muted mt-1"
         >
-          <UIcon name="i-lucide-check-circle" class="size-3.5 text-success" />
-          Template updated
+          <UIcon
+            :name="(part as any).output?.success === false ? 'i-lucide-alert-circle' : 'i-lucide-check-circle'"
+            :class="(part as any).output?.success === false ? 'size-3.5 text-warning' : 'size-3.5 text-success'"
+          />
+          {{ (part as any).output?.success === false ? 'Patch failed — retrying...' : 'Template updated' }}
         </div>
 
         <!-- ask_question is rendered by the parent TemplateChat component as buttons -->

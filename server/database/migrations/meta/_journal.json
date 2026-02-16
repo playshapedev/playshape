@@ -71,6 +71,13 @@
       "when": 1771215035525,
       "tag": "0009_add_brands",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1771262010795,
+      "tag": "0010_add_brand_is_default",
+      "breakpoints": true
     }
   ]
 }

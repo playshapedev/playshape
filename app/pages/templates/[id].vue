@@ -116,9 +116,16 @@ watch(() => template.value?.messages, (messages) => {
 
 // ─── Brand Preview ───────────────────────────────────────────────────────────
 
-const { brands: allBrands } = useBrands()
+const { brands: allBrands, defaultBrand } = useBrands()
 
 const selectedBrandId = ref<string | null>(null)
+
+// Auto-select the default brand when brands load
+watch(defaultBrand, (brand) => {
+  if (brand && selectedBrandId.value === null) {
+    selectedBrandId.value = brand.id
+  }
+}, { immediate: true })
 
 const selectedBrand = computed(() =>
   allBrands.value?.find(b => b.id === selectedBrandId.value) ?? null,
@@ -126,7 +133,7 @@ const selectedBrand = computed(() =>
 
 const brandMenuItems = computed(() => {
   const brands = (allBrands.value || []).map(b => ({
-    label: b.name,
+    label: b.isDefault ? `${b.name} (Default)` : b.name,
     trailingIcon: selectedBrandId.value === b.id ? 'i-lucide-check' : undefined,
     onSelect: () => { selectedBrandId.value = b.id },
   }))

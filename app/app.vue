@@ -10,6 +10,8 @@ interface ElectronAPI {
     sfc: string;
     data: Record<string, unknown>;
     depMappings: Record<string, string>;
+    brandCSS?: string;
+    brandFontLink?: string;
   }) => Promise<string>;
 }
 

@@ -40,6 +40,10 @@ export default defineNuxtConfig({
     rollupConfig: {
       external: ['better-sqlite3', '@xenova/transformers', 'ollama-ai-provider-v2'],
     },
+    serverAssets: [
+      { baseName: 'prompts', dir: '../server/prompts' },
+      { baseName: 'ui-references', dir: '../.agents/skills/nuxt-ui' },
+    ],
   },
 
   devServer: {

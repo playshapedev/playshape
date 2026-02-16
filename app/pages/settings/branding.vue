@@ -142,6 +142,20 @@ async function onDelete() {
     deleting.value = false
   }
 }
+
+// ─── Set Default ─────────────────────────────────────────────────────────────
+
+async function onSetDefault(brand: Brand) {
+  try {
+    await setDefaultBrand(brand.id)
+    toast.add({ title: `${brand.name} is now the default`, color: 'success', icon: 'i-lucide-check-circle' })
+    await refresh()
+  }
+  catch (error) {
+    toast.add({ title: 'Failed to set default brand', color: 'error', icon: 'i-lucide-x' })
+    console.error(error)
+  }
+}
 </script>
 
 <template>
@@ -189,6 +203,7 @@ async function onDelete() {
         :brand="brand"
         @edit="openEditModal(brand)"
         @delete="confirmDelete(brand)"
+        @set-default="onSetDefault(brand)"
       />
     </div>
   </div>

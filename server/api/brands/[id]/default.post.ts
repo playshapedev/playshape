@@ -1,0 +1,29 @@
+import { eq } from 'drizzle-orm'
+import { brands } from '~~/server/database/schema'
+
+export default defineEventHandler((event) => {
+  const id = getRouterParam(event, 'id')
+  if (!id) {
+    throw createError({ statusCode: 400, statusMessage: 'Brand ID is required' })
+  }
+
+  const db = useDb()
+  const now = new Date()
+
+  const existing = db.select().from(brands).where(eq(brands.id, id)).get()
+  if (!existing) {
+    throw createError({ statusCode: 404, statusMessage: 'Brand not found' })
+  }
+
+  // Clear default on all brands, then set the requested one
+  db.update(brands)
+    .set({ isDefault: false, updatedAt: now })
+    .run()
+
+  db.update(brands)
+    .set({ isDefault: true, updatedAt: now })
+    .where(eq(brands.id, id))
+    .run()
+
+  return db.select().from(brands).where(eq(brands.id, id)).get()
+})

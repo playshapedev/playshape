@@ -23,6 +23,8 @@ files:
 
 # Database migrations need to be accessible at a known path on disk,
 # outside the app bundle, so Drizzle can read them at runtime.
+# Prompts and UI references are bundled via Nitro serverAssets (unstorage)
+# and don't need extraResources.
 extraResources:
   - from: server/database/migrations
     to: migrations

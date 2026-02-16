@@ -8,7 +8,14 @@ export type Brand = typeof brands.$inferSelect
 
 export function useBrands() {
   const { data, pending, error, refresh } = useFetch<Brand[]>('/api/brands')
-  return { brands: data, pending, error, refresh }
+  const defaultBrand = computed(() => data.value?.find(b => b.isDefault) ?? null)
+  return { brands: data, defaultBrand, pending, error, refresh }
+}
+
+export async function setDefaultBrand(id: string) {
+  return $fetch<Brand>(`/api/brands/${id}/default`, {
+    method: 'POST',
+  })
 }
 
 export function useBrand(id: MaybeRef<string>) {

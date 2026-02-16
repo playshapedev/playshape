@@ -197,6 +197,7 @@ const spacerHeight = ref(0)
 const innerWrapperRef = ref<HTMLElement | null>(null)
 let containerObserver: ResizeObserver | null = null
 let contentObserver: ResizeObserver | null = null
+let lastContentHeight = 0 // tracks content height excluding spacer to break observer loops
 
 /**
  * Recalculate the bottom spacer height based on the last user message's position.
@@ -239,10 +240,7 @@ function updateSpacerHeight() {
   // The spacer needs to fill enough space so that scrolling puts the user message at the top
   const needed = Math.max(0, msgTop + viewportHeight - contentWithoutSpacer - SPACER_PADDING)
 
-  // Only update if meaningfully different to avoid ResizeObserver feedback loops
-  if (Math.abs(spacerHeight.value - needed) > 1) {
-    spacerHeight.value = needed
-  }
+  spacerHeight.value = needed
 }
 
 onMounted(() => {
@@ -259,8 +257,15 @@ onMounted(() => {
 
   if (innerWrapperRef.value) {
     // Track content height changes (e.g., during LLM streaming) to shrink the spacer
-    // as the assistant response grows below the last user message
+    // as the assistant response grows below the last user message.
+    // Only recalculate when the content height (excluding the spacer) actually changed,
+    // to prevent a ResizeObserver feedback loop where changing the spacer triggers
+    // another observation which recalculates the spacer again.
     contentObserver = new ResizeObserver(() => {
+      if (!innerWrapperRef.value) return
+      const contentHeight = innerWrapperRef.value.scrollHeight - spacerHeight.value
+      if (Math.abs(contentHeight - lastContentHeight) < 1) return
+      lastContentHeight = contentHeight
       updateSpacerHeight()
     })
     contentObserver.observe(innerWrapperRef.value)
@@ -373,20 +378,23 @@ watch(() => visibleMessages.value.length, (count) => {
 
                 <!-- Template update: in progress -->
                 <div
-                  v-else-if="part.type === 'tool-update_template' && (part as any).state !== 'output-available'"
+                  v-else-if="(part.type === 'tool-update_template' || part.type === 'tool-patch_component') && (part as any).state !== 'output-available'"
                   class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
                 >
                   <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-                  Updating template...
+                  {{ part.type === 'tool-patch_component' ? 'Patching component...' : 'Updating template...' }}
                 </div>
 
                 <!-- Template update: complete -->
                 <div
-                  v-else-if="part.type === 'tool-update_template' && (part as any).state === 'output-available'"
+                  v-else-if="(part.type === 'tool-update_template' || part.type === 'tool-patch_component') && (part as any).state === 'output-available'"
                   class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
                 >
-                  <UIcon name="i-lucide-check-circle" class="size-3.5 text-success" />
-                  Template updated
+                  <UIcon
+                    :name="(part as any).output?.success === false ? 'i-lucide-alert-circle' : 'i-lucide-check-circle'"
+                    :class="(part as any).output?.success === false ? 'size-3.5 text-warning' : 'size-3.5 text-success'"
+                  />
+                  {{ (part as any).output?.success === false ? 'Patch failed — retrying...' : 'Template updated' }}
                 </div>
 
                 <!-- Get template: reading -->

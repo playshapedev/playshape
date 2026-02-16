@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electron', {
     sfc: string
     data: Record<string, unknown>
     depMappings: Record<string, string>
+    brandCSS?: string
+    brandFontLink?: string
   }) => ipcRenderer.invoke('generate-thumbnail', args) as Promise<string>,
 })
 

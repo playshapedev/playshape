@@ -301,14 +301,30 @@ async function createWindow() {
     sfc: string
     data: Record<string, unknown>
     depMappings: Record<string, string>
+    brandCSS?: string
+    brandFontLink?: string
   }) => {
     const THUMBNAIL_WIDTH = 800
     const THUMBNAIL_HEIGHT = 600
     const CAPTURE_TIMEOUT = 20000 // 20s max wait for render
 
+    // Inject brand CSS and font link into the srcdoc if provided
+    let srcdoc = args.srcdoc
+    if (args.brandCSS || args.brandFontLink) {
+      const brandTags: string[] = []
+      if (args.brandFontLink) {
+        brandTags.push(`<link id="brand-font" rel="stylesheet" href="${args.brandFontLink}">`)
+      }
+      if (args.brandCSS) {
+        brandTags.push(`<style id="brand-override">${args.brandCSS}</style>`)
+      }
+      // Insert before </head> so brand overrides load with the page
+      srcdoc = srcdoc.replace('</head>', `${brandTags.join('\n')}\n</head>`)
+    }
+
     // Write srcdoc to a temp file — data: URLs block external script loading
     const tmpFile = path.join(os.tmpdir(), `playshape-thumb-${Date.now()}.html`)
-    fs.writeFileSync(tmpFile, args.srcdoc, 'utf-8')
+    fs.writeFileSync(tmpFile, srcdoc, 'utf-8')
 
     const offscreen = new BrowserWindow({
       width: THUMBNAIL_WIDTH,

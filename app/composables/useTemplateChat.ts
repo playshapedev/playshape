@@ -30,7 +30,7 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
       // Check if any assistant message in this response used update_template
       lastResponseHadUpdate.value = chat.messages.some(msg =>
         msg.role === 'assistant'
-        && msg.parts.some(p => p.type === 'tool-update_template'),
+        && msg.parts.some(p => p.type === 'tool-update_template' || p.type === 'tool-patch_component'),
       )
 
       await saveMessages()

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import type { Brand } from '~/composables/useBrands'
 
-defineProps<{
+const props = defineProps<{
   brand: Brand
 }>()
 
 const emit = defineEmits<{
   edit: []
   delete: []
+  setDefault: []
 }>()
 
 const menuItems = computed(() => [
@@ -17,6 +18,13 @@ const menuItems = computed(() => [
       icon: 'i-lucide-pencil',
       onSelect: () => emit('edit'),
     },
+    ...(!props.brand.isDefault
+      ? [{
+          label: 'Set as Default',
+          icon: 'i-lucide-check-circle',
+          onSelect: () => emit('setDefault'),
+        }]
+      : []),
   ],
   [
     {
@@ -49,7 +57,16 @@ const menuItems = computed(() => [
           />
         </div>
         <div class="min-w-0">
-          <h3 class="font-semibold truncate">{{ brand.name }}</h3>
+          <div class="flex items-center gap-2">
+            <h3 class="font-semibold truncate">{{ brand.name }}</h3>
+            <UBadge
+              v-if="brand.isDefault"
+              label="Default"
+              color="primary"
+              variant="subtle"
+              size="xs"
+            />
+          </div>
           <p class="text-sm text-muted truncate">
             {{ brand.fontFamily }} &middot; {{ brand.baseFontSize }}px
           </p>

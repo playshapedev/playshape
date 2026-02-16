@@ -22,9 +22,14 @@ export default defineEventHandler(async (event) => {
   const now = new Date()
   const id = crypto.randomUUID()
 
+  // Auto-set as default if this is the first brand
+  const existingCount = db.select().from(brands).all().length
+  const isDefault = existingCount === 0
+
   db.insert(brands).values({
     id,
     ...parsed,
+    isDefault,
     createdAt: now,
     updatedAt: now,
   }).run()

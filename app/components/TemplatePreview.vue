@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Brand } from '~/composables/useBrands'
+import { COURSE_API_PREVIEW_SCRIPT } from '~/utils/courseApi/preview'
 
 interface Dependency {
   name: string
@@ -156,6 +157,10 @@ ${dependencyScriptTags.value}
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>
   <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader@0.9.5/dist/vue3-sfc-loader.js"><\/script>
 ${toolHeadHtml.value}
+  <script>
+    // ── CourseAPI (Preview Adapter) ──────────────────────────
+    ${COURSE_API_PREVIEW_SCRIPT}
+  <\/script>
   <style>
     body { margin: 0; padding: 0; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
     #app { min-height: 100vh; }
@@ -725,6 +730,8 @@ async function generateThumbnail(): Promise<string | null> {
     sfc: string
     data: Record<string, unknown>
     depMappings: Record<string, string>
+    brandCSS?: string
+    brandFontLink?: string
   }) => Promise<string> } }).electron
 
   if (!electron || !props.componentSource) return null
@@ -736,12 +743,18 @@ async function generateThumbnail(): Promise<string | null> {
     depMappings[dep.name] = dep.global
   }
 
+  // Include brand styling so the thumbnail matches the branded preview
+  const brandCSS = props.brand ? generateBrandCSS(props.brand) : undefined
+  const brandFontLink = props.brand ? (getBrandFontLink(props.brand) ?? undefined) : undefined
+
   try {
     return await electron.generateThumbnail({
       srcdoc: iframeSrcdoc.value,
       sfc: props.componentSource,
       data: JSON.parse(JSON.stringify(props.data)),
       depMappings,
+      brandCSS,
+      brandFontLink,
     })
   }
   catch (err) {
