@@ -65,6 +65,10 @@ export const navigation: NavItem[] = [
     path: '/templates',
     title: 'Templates',
     icon: 'i-lucide-layout-template',
+    tabs: [
+      { path: '', label: 'Activities', icon: 'i-lucide-play-circle' },
+      { path: 'interfaces', label: 'Interfaces', icon: 'i-lucide-panel-top' },
+    ],
     children: [
       { path: '/templates/:id', title: 'Template' },
     ],

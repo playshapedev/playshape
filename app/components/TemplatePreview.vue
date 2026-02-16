@@ -5,11 +5,19 @@ interface Dependency {
   global: string
 }
 
+interface SlotContent {
+  sfc: string
+  data: Record<string, unknown>
+  dependencies?: Dependency[]
+}
+
 const props = defineProps<{
   componentSource: string
   data: Record<string, unknown>
   dependencies?: Dependency[]
   tools?: string[]
+  /** When provided, the component is treated as a wrapper — slotContent is rendered inside <slot name="activity"> */
+  slotContent?: SlotContent | null
 }>()
 
 const emit = defineEmits<{
@@ -74,8 +82,17 @@ const needsSameOrigin = computed(() => !!props.tools?.length)
  * compile and mount SFC components.
  */
 const dependencyScriptTags = computed(() => {
-  if (!props.dependencies?.length) return ''
-  return props.dependencies
+  // Merge main dependencies + slot content dependencies, deduplicating by URL
+  const allDeps = [...(props.dependencies || [])]
+  const seen = new Set(allDeps.map(d => d.url))
+  for (const dep of (props.slotContent?.dependencies || [])) {
+    if (!seen.has(dep.url)) {
+      allDeps.push(dep)
+      seen.add(dep.url)
+    }
+  }
+  if (!allDeps.length) return ''
+  return allDeps
     .map(dep => `  <script src="${dep.url}"><\/script>`)
     .join('\n')
 })
@@ -300,7 +317,21 @@ ${toolSetupJs.value}
     let currentApp = null;
     let depMappings = {}; // { packageName: globalVarName }
 
-    async function mountComponent(sfcSource, data) {
+    function makeLoaderOptions(moduleCache, fileMap) {
+      return {
+        moduleCache,
+        getFile(url) {
+          if (fileMap[url]) return Promise.resolve(fileMap[url]);
+          return fetch(url).then(r => r.ok ? r.text() : Promise.reject(new Error(url + ' ' + r.statusText)));
+        },
+        addStyle(textContent) {
+          const style = Object.assign(document.createElement('style'), { textContent });
+          document.head.appendChild(style);
+        },
+      };
+    }
+
+    async function mountComponent(sfcSource, data, slotContent) {
       // Unmount previous app
       if (currentApp) {
         try { currentApp.unmount(); } catch {}
@@ -325,23 +356,30 @@ ${toolSetupJs.value}
           if (window[globalName]) moduleCache[pkg] = window[globalName];
         }
 
-        const options = {
-          moduleCache,
-          getFile(url) {
-            if (url === '/component.vue') return Promise.resolve(sfcSource);
-            return fetch(url).then(r => r.ok ? r.text() : Promise.reject(new Error(url + ' ' + r.statusText)));
-          },
-          addStyle(textContent) {
-            const style = Object.assign(document.createElement('style'), { textContent });
-            document.head.appendChild(style);
-          },
-        };
+        const mainOptions = makeLoaderOptions(moduleCache, { '/component.vue': sfcSource });
+        const MainComp = defineAsyncComponent(() => loadModule('/component.vue', mainOptions));
 
-        const AsyncComp = defineAsyncComponent(() => loadModule('/component.vue', options));
+        // If slotContent is provided, compile the activity SFC and compose them
+        let SlotComp = null;
+        if (slotContent && slotContent.sfc) {
+          // Merge slot dependency mappings into moduleCache
+          const slotModuleCache = { ...moduleCache };
+          if (slotContent.depMappings) {
+            for (const [pkg, globalName] of Object.entries(slotContent.depMappings)) {
+              if (window[globalName]) slotModuleCache[pkg] = window[globalName];
+            }
+          }
+          const slotOptions = makeLoaderOptions(slotModuleCache, { '/activity.vue': slotContent.sfc });
+          SlotComp = defineAsyncComponent(() => loadModule('/activity.vue', slotOptions));
+        }
 
         currentApp = createApp({
           render() {
-            return h(AsyncComp, { data });
+            const slots = {};
+            if (SlotComp && slotContent) {
+              slots.activity = () => h(SlotComp, { data: slotContent.data || {} });
+            }
+            return h(MainComp, { data }, slots);
           }
         });
 
@@ -361,7 +399,7 @@ ${toolSetupJs.value}
     window.addEventListener('message', (event) => {
       if (event.data?.type === 'update') {
         if (event.data.depMappings) depMappings = event.data.depMappings;
-        mountComponent(event.data.sfc, event.data.data || {});
+        mountComponent(event.data.sfc, event.data.data || {}, event.data.slotContent || null);
       }
       else if (event.data?.type === 'theme') {
         var isDark = event.data.dark;
@@ -458,17 +496,32 @@ function sendUpdate() {
   for (const dep of (props.dependencies || [])) {
     depMappings[dep.name] = dep.global
   }
+  // Build slot content payload if provided
+  let slotContentPayload = null
+  if (props.slotContent?.sfc) {
+    const slotDepMappings: Record<string, string> = {}
+    for (const dep of (props.slotContent.dependencies || [])) {
+      slotDepMappings[dep.name] = dep.global
+    }
+    slotContentPayload = {
+      sfc: props.slotContent.sfc,
+      data: JSON.parse(JSON.stringify(props.slotContent.data)),
+      depMappings: slotDepMappings,
+    }
+  }
+
   // Deep-clone to strip Vue reactive proxy — postMessage requires plain objects
   iframeRef.value.contentWindow.postMessage({
     type: 'update',
     sfc: props.componentSource,
     data: JSON.parse(JSON.stringify(props.data)),
     depMappings,
+    slotContent: slotContentPayload,
   }, '*')
 }
 
-// Re-send whenever the component source or data changes
-watch(() => [props.componentSource, props.data], () => {
+// Re-send whenever the component source, data, or slot content changes
+watch(() => [props.componentSource, props.data, props.slotContent], () => {
   if (iframeReady.value) {
     previewError.value = null
     sendUpdate()

@@ -1,0 +1,1 @@
+ALTER TABLE `templates` ADD `kind` text DEFAULT 'activity' NOT NULL;

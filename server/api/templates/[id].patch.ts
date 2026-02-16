@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { templates } from '~~/server/database/schema'
+import { templates, TEMPLATE_KINDS } from '~~/server/database/schema'
 
 const updateTemplateSchema = z.object({
+  kind: z.enum(TEMPLATE_KINDS).optional(),
   name: z.string().min(1).optional(),
   description: z.string().optional(),
   inputSchema: z.any().optional(),

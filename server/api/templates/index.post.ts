@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { templates } from '~~/server/database/schema'
+import { templates, TEMPLATE_KINDS } from '~~/server/database/schema'
 
 const createTemplateSchema = z.object({
   name: z.string().min(1, 'Template name is required'),
   description: z.string().optional().default(''),
+  kind: z.enum(TEMPLATE_KINDS).optional().default('activity'),
 })
 
 export default defineEventHandler(async (event) => {
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
 
   db.insert(templates).values({
     id,
+    kind: parsed.kind,
     name: parsed.name,
     description: parsed.description,
     status: 'draft',

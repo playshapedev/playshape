@@ -117,14 +117,22 @@ export const llmProviders = sqliteTable('llm_providers', {
 })
 
 // ─── Templates ───────────────────────────────────────────────────────────────
-// Reusable activity blueprints created through AI-assisted conversation.
+// Reusable blueprints created through AI-assisted conversation.
+// Two kinds:
+//   - 'activity': a practice activity (quiz, branching scenario, role-play, etc.)
+//   - 'interface': a course navigation wrapper (branding, lesson nav, SCORM/xAPI)
+//
 // Each template has an input schema (defining form fields for parameterization)
-// and a Vue 3 SFC component (the activity itself). When a designer uses a
-// template, they fill in the form → produces JSON data → fed to the Vue
-// component to render a complete activity.
+// and a Vue 3 SFC component. Interface templates include a <slot name="activity">
+// where activity content is rendered.
+
+/** Canonical list of template kinds. */
+export const TEMPLATE_KINDS = ['activity', 'interface'] as const
+export type TemplateKind = (typeof TEMPLATE_KINDS)[number]
 
 export const templates = sqliteTable('templates', {
   id: text('id').primaryKey(),
+  kind: text('kind').$type<TemplateKind>().notNull().default('activity'),
   name: text('name').notNull(),
   description: text('description').default(''),
   // JSON array of field definitions — supports nested array fields for structured lists

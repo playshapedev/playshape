@@ -1,9 +1,12 @@
-import type { templates } from '~~/server/database/schema'
+import type { templates, TemplateKind } from '~~/server/database/schema'
 
 export type Template = typeof templates.$inferSelect
 
-export function useTemplates() {
-  const { data, pending, error, refresh } = useFetch<Template[]>('/api/templates')
+export function useTemplates(kind?: MaybeRef<TemplateKind>) {
+  const resolvedKind = kind ? toRef(kind) : undefined
+  const { data, pending, error, refresh } = useFetch<Template[]>(
+    () => resolvedKind?.value ? `/api/templates?kind=${resolvedKind.value}` : '/api/templates',
+  )
   return { templates: data, pending, error, refresh }
 }
 
@@ -13,7 +16,7 @@ export function useTemplate(id: MaybeRef<string>) {
   return { template: data, pending, error, refresh }
 }
 
-export async function createTemplate(data: { name: string; description?: string }) {
+export async function createTemplate(data: { name: string; description?: string; kind?: TemplateKind }) {
   return $fetch<Template>('/api/templates', {
     method: 'POST',
     body: data,
@@ -21,6 +24,7 @@ export async function createTemplate(data: { name: string; description?: string 
 }
 
 export async function updateTemplate(id: string, data: {
+  kind?: TemplateKind
   name?: string
   description?: string
   inputSchema?: unknown

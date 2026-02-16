@@ -57,6 +57,13 @@
       "when": 1771203736001,
       "tag": "0007_add_template_thumbnail",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1771211575140,
+      "tag": "0008_add_template_kind",
+      "breakpoints": true
     }
   ]
 }

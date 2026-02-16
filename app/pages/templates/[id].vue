@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'dashboard', noPadding: true })
+definePageMeta({ noPadding: true })
 
 const route = useRoute()
 const router = useRouter()
@@ -112,6 +112,48 @@ watch(() => template.value?.messages, (messages) => {
     initialChatMessages.value = messages as any[]
   }
 }, { immediate: true })
+
+// ─── Interface: Activity Slot Preview ────────────────────────────────────────
+
+const isInterface = computed(() => template.value?.kind === 'interface')
+
+// Fetch activity templates for the slot selector (only when editing an interface)
+const { templates: activityTemplates } = useTemplates('activity')
+
+// Only show activity templates that have a component to preview
+const availableActivities = computed(() =>
+  (activityTemplates.value || []).filter(t => t.component),
+)
+
+// The selected activity template ID for the slot preview
+const selectedActivityId = ref<string | null>(null)
+
+// Auto-select the first available activity when list loads
+watch(availableActivities, (activities) => {
+  if (activities.length && !selectedActivityId.value && activities[0]) {
+    selectedActivityId.value = activities[0].id
+  }
+}, { immediate: true })
+
+const selectedActivity = computed(() =>
+  availableActivities.value.find(t => t.id === selectedActivityId.value) ?? null,
+)
+
+// Items for the activity selector dropdown
+const activitySelectorItems = computed(() => [
+  { label: 'No activity', value: '__none__' },
+  ...availableActivities.value.map(a => ({ label: a.name, value: a.id })),
+])
+
+// Build the slotContent prop for TemplatePreview
+const slotContent = computed(() => {
+  if (!isInterface.value || !selectedActivity.value?.component) return null
+  return {
+    sfc: selectedActivity.value.component,
+    data: (selectedActivity.value.sampleData as Record<string, unknown>) || {},
+    dependencies: (selectedActivity.value.dependencies as Array<{ name: string; url: string; global: string }>) || [],
+  }
+})
 
 const chatPosition = ref<'left' | 'right'>(
   (typeof localStorage !== 'undefined' && localStorage.getItem('playshape:template-chat-position') as 'left' | 'right') || 'left',
@@ -363,9 +405,21 @@ async function generateAndSaveThumbnail() {
         :data="formData"
         :dependencies="(template.dependencies as any[]) || []"
         :tools="(template.tools as string[]) || []"
+        :slot-content="slotContent"
         @error="onPreviewError"
       >
         <template #header-actions>
+          <!-- Activity selector for interface templates -->
+          <USelectMenu
+            v-if="isInterface && availableActivities.length"
+            :model-value="selectedActivityId ?? '__none__'"
+            :items="activitySelectorItems"
+            value-key="value"
+            placeholder="Select activity..."
+            class="w-40"
+            size="xs"
+            @update:model-value="selectedActivityId = $event === '__none__' ? null : $event"
+          />
           <!-- Save status indicator -->
           <Transition
             enter-active-class="transition-opacity duration-200"
