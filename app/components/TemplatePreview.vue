@@ -63,14 +63,26 @@ function resetToFollowApp() {
 }
 
 function syncThemeToIframe(dark: boolean) {
-  if (!iframeRef.value?.contentWindow) return
-  iframeRef.value.contentWindow.postMessage({ type: 'theme', dark }, '*')
+  if (iframeRef.value?.contentWindow) {
+    iframeRef.value.contentWindow.postMessage({ type: 'theme', dark }, '*')
+  }
+  if (popupWindow.value && !popupWindow.value.closed && popupReady.value) {
+    popupWindow.value.postMessage({ type: 'theme', dark }, '*')
+  }
 }
 
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const iframeReady = ref(false)
 const iframeFocused = ref(false)
 const previewError = ref<string | null>(null)
+
+// ─── Popup Window ────────────────────────────────────────────────────────────
+
+const popupWindow = ref<Window | null>(null)
+const popupReady = ref(false)
+
+/** Check if the popup is still open (user may close it manually). */
+const isPopupOpen = computed(() => !!popupWindow.value && !popupWindow.value.closed)
 
 /**
  * Whether the iframe needs allow-same-origin.
@@ -318,6 +330,10 @@ ${toolSetupJs.value}
     const { createApp, defineAsyncComponent, reactive, h } = Vue;
     const { loadModule } = window['vue3-sfc-loader'];
 
+    // Resolve the host window: parent (iframe) or opener (popup)
+    var hostWindow = window.parent !== window ? window.parent : window.opener;
+    function postToHost(msg) { if (hostWindow) hostWindow.postMessage(msg, '*'); }
+
     let currentApp = null;
     let depMappings = {}; // { packageName: globalVarName }
 
@@ -389,14 +405,14 @@ ${toolSetupJs.value}
 
         currentApp.config.errorHandler = (err) => {
           appEl.innerHTML = '<div class="preview-error">Runtime error:\\n' + (err.message || err) + '</div>';
-          window.parent.postMessage({ type: 'preview-error', error: err.message || String(err) }, '*');
+          postToHost({ type: 'preview-error', error: err.message || String(err) });
         };
 
         currentApp.mount(appEl);
-        window.parent.postMessage({ type: 'preview-mounted' }, '*');
+        postToHost({ type: 'preview-mounted' });
       } catch (err) {
         appEl.innerHTML = '<div class="preview-error">Compile error:\\n' + (err.message || err) + '</div>';
-        window.parent.postMessage({ type: 'preview-error', error: err.message || String(err) }, '*');
+        postToHost({ type: 'preview-error', error: err.message || String(err) });
       }
     }
 
@@ -443,8 +459,8 @@ ${toolSetupJs.value}
       }
     });
 
-    // Signal that the iframe is ready
-    window.parent.postMessage({ type: 'preview-ready' }, '*');
+    // Signal that the iframe/popup is ready
+    postToHost({ type: 'preview-ready' });
   <\/script>
 </body>
 </html>`)
@@ -518,21 +534,19 @@ onUnmounted(() => {
   window.removeEventListener('blur', onWindowBlur)
   window.removeEventListener('focus', onWindowFocus)
   window.removeEventListener('playshape:theme-reset', onThemeReset)
+  closePopup()
 })
 
 /**
- * Send the current SFC source and data to the iframe for rendering.
+ * Build the update message payload (reused for iframe and popup).
  */
-function sendUpdate() {
-  if (!iframeRef.value?.contentWindow) return
-  // Build a name→global mapping for the iframe's moduleCache
+function buildUpdatePayload() {
   const depMappings: Record<string, string> = {
     ...toRaw(toolModuleMappings.value),
   }
   for (const dep of (props.dependencies || [])) {
     depMappings[dep.name] = dep.global
   }
-  // Build slot content payload if provided
   let slotContentPayload = null
   if (props.slotContent?.sfc) {
     const slotDepMappings: Record<string, string> = {}
@@ -545,15 +559,27 @@ function sendUpdate() {
       depMappings: slotDepMappings,
     }
   }
-
-  // Deep-clone to strip Vue reactive proxy — postMessage requires plain objects
-  iframeRef.value.contentWindow.postMessage({
-    type: 'update',
+  return {
+    type: 'update' as const,
     sfc: props.componentSource,
     data: JSON.parse(JSON.stringify(props.data)),
     depMappings,
     slotContent: slotContentPayload,
-  }, '*')
+  }
+}
+
+/**
+ * Send the current SFC source and data to the iframe for rendering.
+ */
+function sendUpdate() {
+  const payload = buildUpdatePayload()
+  if (iframeRef.value?.contentWindow) {
+    iframeRef.value.contentWindow.postMessage(payload, '*')
+  }
+  // Also forward to popup window if open
+  if (popupWindow.value && !popupWindow.value.closed && popupReady.value) {
+    popupWindow.value.postMessage(payload, '*')
+  }
 }
 
 // Re-send whenever the component source, data, or slot content changes
@@ -572,22 +598,121 @@ watch(appIsDark, (dark) => {
 
 // ─── Brand Injection ─────────────────────────────────────────────────────────
 
-function sendBrand() {
-  if (!iframeRef.value?.contentWindow) return
-  if (!props.brand) {
-    // Clear brand overrides
-    iframeRef.value.contentWindow.postMessage({ type: 'brand', css: null, fontLink: null }, '*')
-    return
+function buildBrandPayload() {
+  if (!props.brand) return { type: 'brand' as const, css: null, fontLink: null }
+  return {
+    type: 'brand' as const,
+    css: generateBrandCSS(props.brand),
+    fontLink: getBrandFontLink(props.brand),
   }
-  const css = generateBrandCSS(props.brand)
-  const fontLink = getBrandFontLink(props.brand)
-  iframeRef.value.contentWindow.postMessage({ type: 'brand', css, fontLink }, '*')
+}
+
+function sendBrand() {
+  const payload = buildBrandPayload()
+  if (iframeRef.value?.contentWindow) {
+    iframeRef.value.contentWindow.postMessage(payload, '*')
+  }
+  if (popupWindow.value && !popupWindow.value.closed && popupReady.value) {
+    popupWindow.value.postMessage(payload, '*')
+  }
 }
 
 // Re-send brand when prop changes
 watch(() => props.brand, () => {
   if (iframeReady.value) sendBrand()
 }, { deep: true })
+
+// ─── Popup Window ────────────────────────────────────────────────────────────
+
+/**
+ * Open the preview in a separate browser window.
+ * The popup loads the same srcdoc HTML and receives updates via postMessage.
+ */
+function openPopup() {
+  // If already open, focus it
+  if (popupWindow.value && !popupWindow.value.closed) {
+    popupWindow.value.focus()
+    return
+  }
+
+  popupReady.value = false
+
+  // Open about:blank — it inherits the opener's origin, so window.opener
+  // and postMessage work without cross-origin issues.
+  const popup = window.open('about:blank', '_blank', 'width=900,height=700,menubar=no,toolbar=no,location=no,status=no')
+  if (!popup) return
+
+  popupWindow.value = popup
+
+  // Write the srcdoc HTML into the popup. External <script src> tags
+  // load normally because the document is same-origin (about:blank inherits).
+  popup.document.open()
+  popup.document.write(iframeSrcdoc.value)
+  popup.document.close()
+
+  // Listen for readiness via two channels:
+  // 1. postMessage 'preview-ready' from the popup's inline script (most reliable)
+  // 2. Fallback: poll for Vue global on the popup window
+  const onPopupMessage = (event: MessageEvent) => {
+    if (event.source !== popup) return
+    if (event.data?.type === 'preview-ready') {
+      initPopup()
+    }
+  }
+  window.addEventListener('message', onPopupMessage)
+
+  let initialized = false
+  function initPopup() {
+    if (initialized || !popup || popup.closed) return
+    initialized = true
+    popupReady.value = true
+    popup.postMessage(buildUpdatePayload(), '*')
+    popup.postMessage({ type: 'theme', dark: previewIsDark.value }, '*')
+    if (props.brand) popup.postMessage(buildBrandPayload(), '*')
+  }
+
+  // Fallback: poll until Vue is loaded on the popup, then trigger init.
+  // This handles cases where postMessage from popup to opener doesn't work
+  // (e.g. Electron quirks with window.opener).
+  const pollReady = setInterval(() => {
+    try {
+      if (popup.closed) {
+        clearInterval(pollReady)
+        return
+      }
+      if ((popup as any).Vue && (popup as any)['vue3-sfc-loader']) {
+        clearInterval(pollReady)
+        initPopup()
+      }
+    }
+    catch {
+      // Cross-origin access error — stop polling, rely on postMessage
+      clearInterval(pollReady)
+    }
+  }, 200)
+
+  // Stop polling after 15s regardless
+  setTimeout(() => clearInterval(pollReady), 15000)
+
+  // Detect when user closes the popup
+  const checkClosed = setInterval(() => {
+    if (popup.closed) {
+      clearInterval(checkClosed)
+      clearInterval(pollReady)
+      window.removeEventListener('message', onPopupMessage)
+      popupWindow.value = null
+      popupReady.value = false
+    }
+  }, 500)
+}
+
+function closePopup() {
+  if (popupWindow.value && !popupWindow.value.closed) {
+    popupWindow.value.close()
+  }
+  popupWindow.value = null
+  popupReady.value = false
+}
 
 /**
  * Generate a thumbnail for this template using Electron's offscreen rendering.
@@ -667,6 +792,16 @@ defineExpose({ generateThumbnail })
             :color="isFollowingApp ? 'neutral' : 'primary'"
             @click="togglePreviewDark"
             @dblclick.prevent="resetToFollowApp"
+          />
+        </UTooltip>
+        <UTooltip :text="isPopupOpen ? 'Close popup' : 'Open in new window'">
+          <UButton
+            v-if="componentSource"
+            :icon="isPopupOpen ? 'i-lucide-picture-in-picture-2' : 'i-lucide-external-link'"
+            size="xs"
+            variant="ghost"
+            :color="isPopupOpen ? 'primary' : 'neutral'"
+            @click="isPopupOpen ? closePopup() : openPopup()"
           />
         </UTooltip>
         <UButton
