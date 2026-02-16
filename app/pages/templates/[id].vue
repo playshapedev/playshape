@@ -124,10 +124,22 @@ const selectedBrand = computed(() =>
   allBrands.value?.find(b => b.id === selectedBrandId.value) ?? null,
 )
 
-const brandSelectorItems = computed(() => [
-  { label: 'No brand', value: '__none__' },
-  ...(allBrands.value || []).map(b => ({ label: b.name, value: b.id })),
-])
+const brandMenuItems = computed(() => {
+  const brands = (allBrands.value || []).map(b => ({
+    label: b.name,
+    trailingIcon: selectedBrandId.value === b.id ? 'i-lucide-check' : undefined,
+    onSelect: () => { selectedBrandId.value = b.id },
+  }))
+  if (!brands.length) return []
+  return [
+    brands,
+    [{
+      label: 'No brand',
+      trailingIcon: selectedBrandId.value === null ? 'i-lucide-check' : undefined,
+      onSelect: () => { selectedBrandId.value = null },
+    }],
+  ]
+})
 
 // ─── Interface: Activity Slot Preview ────────────────────────────────────────
 
@@ -427,16 +439,16 @@ async function generateAndSaveThumbnail() {
       >
         <template #header-actions>
           <!-- Brand selector -->
-          <USelectMenu
-            v-if="allBrands?.length"
-            :model-value="selectedBrandId ?? '__none__'"
-            :items="brandSelectorItems"
-            value-key="value"
-            placeholder="Brand..."
-            class="w-36"
-            size="xs"
-            @update:model-value="selectedBrandId = $event === '__none__' ? null : $event"
-          />
+          <UDropdownMenu v-if="allBrands?.length" :items="brandMenuItems" size="xs">
+            <UTooltip :text="selectedBrand ? selectedBrand.name : 'Apply brand'">
+              <UButton
+                icon="i-lucide-palette"
+                size="xs"
+                variant="ghost"
+                :color="selectedBrand ? 'primary' : 'neutral'"
+              />
+            </UTooltip>
+          </UDropdownMenu>
           <!-- Activity selector for interface templates -->
           <USelectMenu
             v-if="isInterface && availableActivities.length"
