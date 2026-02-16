@@ -376,11 +376,33 @@ ${toolSetupJs.value}
 </body>
 </html>`)
 
+// Reset iframeReady when the srcdoc changes — the old iframe is being torn down
+// and a new one will load. Without this, sendUpdate() could fire into the dying iframe.
+watch(iframeSrcdoc, () => {
+  iframeReady.value = false
+})
+
+/**
+ * Called when the iframe finishes loading (via @load on the element).
+ * This is more reliable than postMessage('preview-ready') for initial load
+ * because the @load binding is on the element itself — it can't be missed
+ * due to late addEventListener registration. The iframe's inline scripts
+ * have already executed by the time 'load' fires.
+ */
+function onIframeLoad() {
+  iframeReady.value = true
+  sendUpdate()
+}
+
 // Listen for messages from the iframe
 function onIframeMessage(event: MessageEvent) {
   if (event.data?.type === 'preview-ready') {
-    iframeReady.value = true
-    sendUpdate()
+    // Belt-and-suspenders: also handle the postMessage in case @load didn't fire
+    // (shouldn't happen, but defensive)
+    if (!iframeReady.value) {
+      iframeReady.value = true
+      sendUpdate()
+    }
   }
   else if (event.data?.type === 'preview-error') {
     previewError.value = event.data.error
@@ -521,6 +543,7 @@ watch(appIsDark, (dark) => {
           :sandbox="needsSameOrigin ? 'allow-scripts allow-same-origin' : 'allow-scripts'"
           class="w-full h-full border-0"
           title="Template Preview"
+          @load="onIframeLoad"
         />
       </template>
       <template v-else>

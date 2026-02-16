@@ -83,6 +83,7 @@ async function handleClearChat() {
   try {
     await updateTemplate(template.value.id, { messages: [] })
     showClearChatModal.value = false
+    initialChatMessages.value = [] // Reset so re-mount starts fresh
     chatKey.value++ // Force re-mount of TemplateChat
     await refresh()
     toast.add({ title: 'Chat cleared', color: 'success' })
@@ -99,6 +100,17 @@ async function handleClearChat() {
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
+
+// Capture initial messages once so the prop reference stays stable across refresh().
+// TemplateChat only uses initialMessages in the Chat constructor — it doesn't need
+// to react to changes. Passing template.messages directly causes the whole chat to
+// re-render on every refresh() because useFetch returns a new array reference each time.
+const initialChatMessages = ref<any[]>([])
+watch(() => template.value?.messages, (messages) => {
+  if (messages && !initialChatMessages.value.length) {
+    initialChatMessages.value = messages as any[]
+  }
+}, { immediate: true })
 
 const chatPosition = ref<'left' | 'right'>(
   (typeof localStorage !== 'undefined' && localStorage.getItem('playshape:template-chat-position') as 'left' | 'right') || 'left',
@@ -267,14 +279,14 @@ function onPreviewError(error: string | null) {
     />
   </Teleport>
 
-  <!-- Loading -->
-  <div v-if="pending" class="flex items-center justify-center py-12">
+  <!-- Loading (initial load only — never unmount the editor for a refresh) -->
+  <div v-if="!template && pending" class="flex items-center justify-center py-12">
     <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
   </div>
 
   <!-- Error -->
   <EmptyState
-    v-else-if="error"
+    v-else-if="!template && error"
     icon="i-lucide-alert-circle"
     title="Template not found"
     description="This template may have been deleted."
@@ -301,7 +313,7 @@ function onPreviewError(error: string | null) {
         :key="chatKey"
         ref="templateChatRef"
         :template-id="template.id"
-        :initial-messages="(template.messages as any[]) || []"
+        :initial-messages="initialChatMessages"
         @update="refresh()"
       />
     </div>

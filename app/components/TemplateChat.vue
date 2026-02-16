@@ -26,6 +26,24 @@ defineExpose({ reportPreviewError })
 
 const isRunning = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
 
+/**
+ * Check if a message is an auto-reported preview error.
+ * These are sent to the LLM for self-correction but hidden from the UI.
+ */
+function isPreviewErrorMessage(msg: UIMessage): boolean {
+  if (msg.role !== 'user') return false
+  const textPart = msg.parts.find(p => p.type === 'text') as { type: 'text'; text: string } | undefined
+  return textPart?.text.startsWith('[Preview Error]') ?? false
+}
+
+/**
+ * Messages visible to the user — excludes auto-reported preview errors.
+ * The full list (chat.messages) is still sent to the LLM so it can see the errors.
+ */
+const visibleMessages = computed(() =>
+  chat.messages.filter(msg => !isPreviewErrorMessage(msg)),
+)
+
 const input = ref('')
 const customAnswer = ref('')
 const showCustomInput = ref(false)
@@ -81,8 +99,12 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
 
 function handleSend() {
   if (!input.value.trim() || chat.status !== 'ready') return
@@ -159,163 +181,291 @@ function handleRetry() {
   }
 }
 
-// Scroll to bottom on mount (for restored conversations)
-onMounted(() => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+// ─── Bottom-anchored scroll layout ───────────────────────────────────────────
+// Messages are pushed to the bottom when content is short (via flex justify-end).
+// A spacer after the messages provides enough room to scroll the last user message
+// to the top of the viewport — the same pattern used by ChatGPT and Claude.
+//
+// Spacer height is calculated from the last user message's position:
+//   spacerHeight = max(0, lastUserMsgOffsetTop + containerHeight - contentHeight - SPACER_PADDING)
+// where contentHeight excludes the spacer itself. This ensures the last user
+// message can be scrolled exactly to the top with a small padding offset.
+
+const SPACER_PADDING = 40 // px of breathing room below the scrollable area
+const containerHeight = ref(0)
+const spacerHeight = ref(0)
+const innerWrapperRef = ref<HTMLElement | null>(null)
+let containerObserver: ResizeObserver | null = null
+let contentObserver: ResizeObserver | null = null
+
+/**
+ * Recalculate the bottom spacer height based on the last user message's position.
+ * The spacer ensures the last user message can be scrolled to the top of the viewport.
+ */
+function updateSpacerHeight() {
+  if (!messagesContainer.value || !innerWrapperRef.value) {
+    spacerHeight.value = 0
+    return
+  }
+
+  // Find the last visible user message element
+  const msgs = visibleMessages.value
+  let lastUserMsg: typeof msgs[0] | undefined
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i]!.role === 'user') {
+      lastUserMsg = msgs[i]
+      break
     }
-  })
+  }
+
+  if (!lastUserMsg) {
+    spacerHeight.value = 0
+    return
+  }
+
+  const el = messagesContainer.value.querySelector(`[data-message-id="${lastUserMsg.id}"]`) as HTMLElement | null
+  if (!el) {
+    spacerHeight.value = 0
+    return
+  }
+
+  // el.offsetTop is relative to the offsetParent (the inner wrapper, which has position: relative)
+  const msgTop = el.offsetTop
+  const viewportHeight = containerHeight.value
+
+  // Content height without the spacer: total wrapper scrollHeight minus current spacer
+  const contentWithoutSpacer = innerWrapperRef.value.scrollHeight - spacerHeight.value
+
+  // The spacer needs to fill enough space so that scrolling puts the user message at the top
+  const needed = Math.max(0, msgTop + viewportHeight - contentWithoutSpacer - SPACER_PADDING)
+
+  // Only update if meaningfully different to avoid ResizeObserver feedback loops
+  if (Math.abs(spacerHeight.value - needed) > 1) {
+    spacerHeight.value = needed
+  }
+}
+
+onMounted(() => {
+  if (messagesContainer.value) {
+    // Track container (viewport) height for spacer calculations
+    containerObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerHeight.value = entry.contentRect.height
+      }
+      updateSpacerHeight()
+    })
+    containerObserver.observe(messagesContainer.value)
+  }
+
+  if (innerWrapperRef.value) {
+    // Track content height changes (e.g., during LLM streaming) to shrink the spacer
+    // as the assistant response grows below the last user message
+    contentObserver = new ResizeObserver(() => {
+      updateSpacerHeight()
+    })
+    contentObserver.observe(innerWrapperRef.value)
+  }
+
+  // Restored conversations: scroll to the bottom of the container (including spacer)
+  // so the last user message sits at the top of the viewport. MDC renders async
+  // (useAsyncData internally), so we use a MutationObserver to detect when the DOM
+  // has stabilized (no mutations for 150ms), then recalculate the spacer and scroll.
+  if (visibleMessages.value.length && messagesContainer.value) {
+    const container = messagesContainer.value
+    let debounceTimer: ReturnType<typeof setTimeout>
+
+    const scrollToBottom = () => {
+      updateSpacerHeight()
+      nextTick(() => {
+        container.scrollTop = container.scrollHeight
+      })
+    }
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        observer.disconnect()
+        scrollToBottom()
+      }, 150)
+    })
+
+    observer.observe(container, { childList: true, subtree: true, characterData: true })
+
+    // Fallback: if no mutations happen (content already rendered), scroll after a short delay
+    debounceTimer = setTimeout(() => {
+      observer.disconnect()
+      scrollToBottom()
+    }, 150)
+  }
+})
+
+onUnmounted(() => {
+  containerObserver?.disconnect()
+  contentObserver?.disconnect()
 })
 
 // Scroll user's latest message to the top of the view when they send one.
-// Don't auto-scroll during assistant streaming.
-let lastMessageCount = chat.messages.length
+// Don't auto-scroll during assistant streaming — the user can scroll manually.
+// Uses visibleMessages so hidden preview error messages don't trigger scrolling.
+let lastVisibleCount = visibleMessages.value.length
 
-watch(() => chat.messages.length, (count) => {
-  if (count > lastMessageCount) {
-    const lastMsg = chat.messages[count - 1]
+watch(() => visibleMessages.value.length, (count) => {
+  if (count > lastVisibleCount) {
+    const lastMsg = visibleMessages.value[count - 1]
     if (lastMsg?.role === 'user') {
       nextTick(() => {
+        // Recalculate spacer first so there's room to scroll
+        updateSpacerHeight()
         if (!messagesContainer.value) return
-        const el = messagesContainer.value.querySelector(`[data-message-id="${lastMsg.id}"]`) as HTMLElement | null
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }
+        // Need another tick for the spacer DOM update to take effect
+        nextTick(() => {
+          const el = messagesContainer.value!.querySelector(`[data-message-id="${lastMsg.id}"]`) as HTMLElement | null
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        })
       })
     }
   }
-  lastMessageCount = count
+  lastVisibleCount = count
 })
 </script>
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
-    <!-- Messages -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
-      <!-- Empty state -->
-      <div v-if="!chat.messages.length && chat.status === 'ready'" class="flex flex-col items-center justify-center h-full text-center">
-        <UIcon name="i-lucide-message-square" class="size-8 text-muted mb-2" />
-        <p class="text-sm text-muted">
-          Describe the activity you want to build.
-        </p>
-      </div>
+    <!-- Messages (scroll container) -->
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden">
+      <!-- Inner wrapper: min-h-full + justify-end pushes messages to the bottom
+           when content is shorter than the viewport (like mainstream chat UIs) -->
+      <div ref="innerWrapperRef" class="relative min-h-full flex flex-col justify-end p-4 space-y-4">
+        <!-- Empty state -->
+        <div v-if="!visibleMessages.length && chat.status === 'ready'" class="flex-1 flex flex-col items-center justify-center text-center">
+          <UIcon name="i-lucide-message-square" class="size-8 text-muted mb-2" />
+          <p class="text-sm text-muted">
+            Describe the activity you want to build.
+          </p>
+        </div>
 
-      <!-- Message list -->
-      <div v-for="msg in chat.messages" :key="msg.id" :data-message-id="msg.id">
-        <div
-          class="flex gap-2"
-          :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
-        >
-          <!-- Avatar -->
-          <div v-if="msg.role === 'assistant'" class="shrink-0">
-            <div class="size-7 rounded-full bg-primary/10 flex items-center justify-center">
-              <UIcon name="i-lucide-sparkles" class="size-4 text-primary" />
+        <!-- Message list -->
+        <div v-for="msg in visibleMessages" :key="msg.id" :data-message-id="msg.id">
+          <div
+            class="flex gap-2"
+            :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+          >
+            <!-- Avatar -->
+            <div v-if="msg.role === 'assistant'" class="shrink-0">
+              <div class="size-7 rounded-full bg-primary/10 flex items-center justify-center">
+                <UIcon name="i-lucide-sparkles" class="size-4 text-primary" />
+              </div>
+            </div>
+
+            <!-- Content -->
+            <div
+              class="max-w-[85%] min-w-0 rounded-lg px-3 py-2 text-sm break-words overflow-hidden"
+              :class="msg.role === 'user'
+                ? 'bg-brand-orange-700 text-white'
+                : 'bg-elevated dark:bg-playshape-800/60'"
+            >
+              <template v-for="(part, i) in msg.parts" :key="`${msg.id}-${part.type}-${i}`">
+                <!-- Text -->
+                <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
+                <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
+
+                <!-- Template update: in progress -->
+                <div
+                  v-else-if="part.type === 'tool-update_template' && (part as any).state !== 'output-available'"
+                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                  Updating template...
+                </div>
+
+                <!-- Template update: complete -->
+                <div
+                  v-else-if="part.type === 'tool-update_template' && (part as any).state === 'output-available'"
+                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-check-circle" class="size-3.5 text-success" />
+                  Template updated
+                </div>
+
+                <!-- Get template: reading -->
+                <div
+                  v-else-if="part.type === 'tool-get_template' && (part as any).state !== 'output-available'"
+                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                  Reading template...
+                </div>
+
+                <!-- Get template: done (no need to show anything, but keep it quiet) -->
+
+                <!-- Get reference: loading -->
+                <div
+                  v-else-if="part.type === 'tool-get_reference' && (part as any).state !== 'output-available'"
+                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                  Reading {{ (part as any).input?.topic || 'reference' }} docs...
+                </div>
+
+                <!-- Get reference: done -->
+                <div
+                  v-else-if="part.type === 'tool-get_reference' && (part as any).state === 'output-available'"
+                  class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-book-open" class="size-3.5" />
+                  Loaded {{ (part as any).input?.topic || 'reference' }} docs
+                </div>
+
+                <!-- Ask question indicator -->
+                <div
+                  v-else-if="part.type === 'tool-ask_question'"
+                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                >
+                  <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
+                  {{ (part as any).input?.question || 'Asked a question' }}
+                </div>
+              </template>
             </div>
           </div>
+        </div>
 
-          <!-- Content -->
-          <div
-            class="max-w-[85%] min-w-0 rounded-lg px-3 py-2 text-sm break-words overflow-hidden"
-            :class="msg.role === 'user'
-              ? 'bg-brand-orange-700 text-white'
-              : 'bg-elevated dark:bg-playshape-800/60'"
-          >
-            <template v-for="(part, i) in msg.parts" :key="`${msg.id}-${part.type}-${i}`">
-              <!-- Text -->
-              <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
-              <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
+        <!-- Loading indicator (only before any content arrives) -->
+        <div v-if="chat.status === 'submitted'" class="flex items-center gap-2 text-sm text-muted">
+          <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
+          <span>Thinking...</span>
+        </div>
 
-              <!-- Template update: in progress -->
-              <div
-                v-else-if="part.type === 'tool-update_template' && (part as any).state !== 'output-available'"
-                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-              >
-                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-                Updating template...
-              </div>
-
-              <!-- Template update: complete -->
-              <div
-                v-else-if="part.type === 'tool-update_template' && (part as any).state === 'output-available'"
-                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-              >
-                <UIcon name="i-lucide-check-circle" class="size-3.5 text-success" />
-                Template updated
-              </div>
-
-              <!-- Get template: reading -->
-              <div
-                v-else-if="part.type === 'tool-get_template' && (part as any).state !== 'output-available'"
-                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-              >
-                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-                Reading template...
-              </div>
-
-              <!-- Get template: done (no need to show anything, but keep it quiet) -->
-
-              <!-- Get reference: loading -->
-              <div
-                v-else-if="part.type === 'tool-get_reference' && (part as any).state !== 'output-available'"
-                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-              >
-                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-                Reading {{ (part as any).input?.topic || 'reference' }} docs...
-              </div>
-
-              <!-- Get reference: done -->
-              <div
-                v-else-if="part.type === 'tool-get_reference' && (part as any).state === 'output-available'"
-                class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
-              >
-                <UIcon name="i-lucide-book-open" class="size-3.5" />
-                Loaded {{ (part as any).input?.topic || 'reference' }} docs
-              </div>
-
-              <!-- Ask question indicator -->
-              <div
-                v-else-if="part.type === 'tool-ask_question'"
-                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-              >
-                <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
-                {{ (part as any).input?.question || 'Asked a question' }}
-              </div>
-            </template>
+        <!-- Error -->
+        <div v-if="chat.error" class="text-sm bg-error/10 rounded-lg p-3 space-y-2">
+          <div class="flex items-start gap-2">
+            <UIcon name="i-lucide-alert-circle" class="size-4 text-error shrink-0 mt-0.5" />
+            <span class="text-error">{{ formatError(chat.error) }}</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <UButton
+              size="xs"
+              variant="soft"
+              color="error"
+              icon="i-lucide-refresh-cw"
+              label="Retry"
+              @click="handleRetry"
+            />
+            <UButton
+              size="xs"
+              variant="ghost"
+              color="error"
+              icon="i-lucide-x"
+              label="Dismiss"
+              @click="chat.clearError()"
+            />
           </div>
         </div>
-      </div>
 
-      <!-- Loading indicator (only before any content arrives) -->
-      <div v-if="chat.status === 'submitted'" class="flex items-center gap-2 text-sm text-muted">
-        <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
-        <span>Thinking...</span>
-      </div>
-
-      <!-- Error -->
-      <div v-if="chat.error" class="text-sm bg-error/10 rounded-lg p-3 space-y-2">
-        <div class="flex items-start gap-2">
-          <UIcon name="i-lucide-alert-circle" class="size-4 text-error shrink-0 mt-0.5" />
-          <span class="text-error">{{ formatError(chat.error) }}</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <UButton
-            size="xs"
-            variant="soft"
-            color="error"
-            icon="i-lucide-refresh-cw"
-            label="Retry"
-            @click="handleRetry"
-          />
-          <UButton
-            size="xs"
-            variant="ghost"
-            color="error"
-            icon="i-lucide-x"
-            label="Dismiss"
-            @click="chat.clearError()"
-          />
-        </div>
+        <!-- Bottom spacer: provides scrollable room so the last user message
+             can be scrolled to the top of the viewport -->
+        <div v-if="visibleMessages.length && spacerHeight > 0" :style="{ minHeight: spacerHeight + 'px' }" aria-hidden="true" />
       </div>
     </div>
 
