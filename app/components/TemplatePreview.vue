@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { Brand } from '~/composables/useBrands'
+
 interface Dependency {
   name: string
   url: string
@@ -18,6 +20,8 @@ const props = defineProps<{
   tools?: string[]
   /** When provided, the component is treated as a wrapper — slotContent is rendered inside <slot name="activity"> */
   slotContent?: SlotContent | null
+  /** When provided, overrides the design tokens in the preview iframe */
+  brand?: Brand | null
 }>()
 
 const emit = defineEmits<{
@@ -406,6 +410,37 @@ ${toolSetupJs.value}
         document.documentElement.classList.toggle('dark', isDark);
         document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
       }
+      else if (event.data?.type === 'brand') {
+        // Inject or update brand CSS overrides
+        var brandStyleId = 'brand-override';
+        var brandFontId = 'brand-font';
+        var existing = document.getElementById(brandStyleId);
+        if (event.data.css) {
+          if (existing) { existing.textContent = event.data.css; }
+          else {
+            var s = document.createElement('style');
+            s.id = brandStyleId;
+            s.textContent = event.data.css;
+            document.head.appendChild(s);
+          }
+        } else if (existing) {
+          existing.remove();
+        }
+        // Inject or update Google Font link
+        var existingFont = document.getElementById(brandFontId);
+        if (event.data.fontLink) {
+          if (existingFont) { existingFont.setAttribute('href', event.data.fontLink); }
+          else {
+            var link = document.createElement('link');
+            link.id = brandFontId;
+            link.rel = 'stylesheet';
+            link.href = event.data.fontLink;
+            document.head.appendChild(link);
+          }
+        } else if (existingFont) {
+          existingFont.remove();
+        }
+      }
     });
 
     // Signal that the iframe is ready
@@ -430,6 +465,7 @@ watch(iframeSrcdoc, () => {
 function onIframeLoad() {
   iframeReady.value = true
   sendUpdate()
+  if (props.brand) sendBrand()
 }
 
 // Listen for messages from the iframe
@@ -533,6 +569,25 @@ watch(appIsDark, (dark) => {
   if (previewDarkOverride.value !== null) return // independent, don't sync
   syncThemeToIframe(dark)
 })
+
+// ─── Brand Injection ─────────────────────────────────────────────────────────
+
+function sendBrand() {
+  if (!iframeRef.value?.contentWindow) return
+  if (!props.brand) {
+    // Clear brand overrides
+    iframeRef.value.contentWindow.postMessage({ type: 'brand', css: null, fontLink: null }, '*')
+    return
+  }
+  const css = generateBrandCSS(props.brand)
+  const fontLink = getBrandFontLink(props.brand)
+  iframeRef.value.contentWindow.postMessage({ type: 'brand', css, fontLink }, '*')
+}
+
+// Re-send brand when prop changes
+watch(() => props.brand, () => {
+  if (iframeReady.value) sendBrand()
+}, { deep: true })
 
 /**
  * Generate a thumbnail for this template using Electron's offscreen rendering.

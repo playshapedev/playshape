@@ -25,6 +25,7 @@ async function handleDelete() {
   try {
     await deleteTemplate(template.value.id)
     toast.add({ title: 'Template deleted', color: 'success' })
+    await clearNuxtData((key) => typeof key === 'string' && key.startsWith('/api/templates'))
     await router.push('/templates')
   }
   catch (e: unknown) {
@@ -112,6 +113,21 @@ watch(() => template.value?.messages, (messages) => {
     initialChatMessages.value = messages as any[]
   }
 }, { immediate: true })
+
+// ─── Brand Preview ───────────────────────────────────────────────────────────
+
+const { brands: allBrands } = useBrands()
+
+const selectedBrandId = ref<string | null>(null)
+
+const selectedBrand = computed(() =>
+  allBrands.value?.find(b => b.id === selectedBrandId.value) ?? null,
+)
+
+const brandSelectorItems = computed(() => [
+  { label: 'No brand', value: '__none__' },
+  ...(allBrands.value || []).map(b => ({ label: b.name, value: b.id })),
+])
 
 // ─── Interface: Activity Slot Preview ────────────────────────────────────────
 
@@ -406,9 +422,21 @@ async function generateAndSaveThumbnail() {
         :dependencies="(template.dependencies as any[]) || []"
         :tools="(template.tools as string[]) || []"
         :slot-content="slotContent"
+        :brand="selectedBrand"
         @error="onPreviewError"
       >
         <template #header-actions>
+          <!-- Brand selector -->
+          <USelectMenu
+            v-if="allBrands?.length"
+            :model-value="selectedBrandId ?? '__none__'"
+            :items="brandSelectorItems"
+            value-key="value"
+            placeholder="Brand..."
+            class="w-36"
+            size="xs"
+            @update:model-value="selectedBrandId = $event === '__none__' ? null : $event"
+          />
           <!-- Activity selector for interface templates -->
           <USelectMenu
             v-if="isInterface && availableActivities.length"

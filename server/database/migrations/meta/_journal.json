@@ -64,6 +64,13 @@
       "when": 1771211575140,
       "tag": "0008_add_template_kind",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1771215035525,
+      "tag": "0009_add_brands",
+      "breakpoints": true
     }
   ]
 }

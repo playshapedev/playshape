@@ -185,6 +185,26 @@ export interface TemplateMessage {
   }>
 }
 
+// ─── Brands ──────────────────────────────────────────────────────────────────
+// Reusable brand profiles that define the visual identity injected into
+// activity and interface template previews. Each brand specifies colors,
+// typography, and shape tokens that override the default design tokens.
+
+export const brands = sqliteTable('brands', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  primaryColor: text('primary_color').notNull().default('#7458f5'),
+  neutralColor: text('neutral_color').notNull().default('#64748b'),
+  accentColor: text('accent_color').notNull().default('#3b82f6'),
+  fontFamily: text('font_family').notNull().default('Poppins'),
+  fontSource: text('font_source').$type<'google' | 'system'>().notNull().default('google'),
+  baseFontSize: integer('base_font_size').notNull().default(16),
+  typeScaleRatio: text('type_scale_ratio').notNull().default('1.25'),
+  borderRadius: text('border_radius').notNull().default('0.325'),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 // Key-value store for app settings. General preferences live here.
 
