@@ -46,7 +46,11 @@ function tabHref(tab: NavTab): string {
 }
 
 function isTabActive(tab: NavTab): boolean {
-  return route.path === tabHref(tab)
+  const href = tabHref(tab)
+  // For the index tab (empty path), require exact match.
+  // For other tabs, use startsWith so sub-routes stay highlighted.
+  if (!tab.path) return route.path === href
+  return route.path === href || route.path.startsWith(href + '/')
 }
 
 // Clear title and tabs overrides on route change — but only when navigating

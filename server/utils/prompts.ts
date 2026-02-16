@@ -12,6 +12,7 @@ const PROMPT_FILES = [
   'course-api',
   'activity',
   'interface',
+  'activity-editor',
 ] as const
 
 type PromptName = typeof PROMPT_FILES[number]
@@ -55,4 +56,21 @@ export async function useSystemPrompts() {
     activity: [p['activity'], shared].join('\n\n'),
     interface: [p['interface'], shared].join('\n\n'),
   }
+}
+
+/**
+ * Load the activity editor system prompt (for populating activity data fields).
+ * This is a standalone prompt — it doesn't share the template builder sections.
+ */
+let activityEditorCache: string | null = null
+
+export async function useActivityEditorPrompt(): Promise<string> {
+  if (activityEditorCache) return activityEditorCache
+
+  const storage = useStorage('assets:prompts')
+  const content = await storage.getItem<string>('activity-editor.md')
+  if (!content) throw new Error('Prompt file not found in server assets: activity-editor.md')
+
+  activityEditorCache = content
+  return content
 }

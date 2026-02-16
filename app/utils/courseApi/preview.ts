@@ -175,6 +175,14 @@ export const COURSE_API_PREVIEW_SCRIPT = `
       log('complete()', options || {}, LOG_STYLE_SUCCESS);
       dirty = true;
       flush(); // Immediate flush
+
+      // Notify parent for toast
+      var host = window.parent !== window ? window.parent : window.opener;
+      if (host) {
+        try {
+          host.postMessage({ type: 'courseapi-event', event: 'complete', score: score }, '*');
+        } catch (e) {}
+      }
     },
 
     fail: function(options) {
@@ -186,6 +194,14 @@ export const COURSE_API_PREVIEW_SCRIPT = `
       log('fail()', options || {}, LOG_STYLE_ERROR);
       dirty = true;
       flush(); // Immediate flush
+
+      // Notify parent for toast
+      var host = window.parent !== window ? window.parent : window.opener;
+      if (host) {
+        try {
+          host.postMessage({ type: 'courseapi-event', event: 'fail', score: score }, '*');
+        } catch (e) {}
+      }
     },
 
     setProgress: function(value) {
@@ -245,6 +261,22 @@ export const COURSE_API_PREVIEW_SCRIPT = `
       }
       log('record: ' + summary, statement);
       markDirty();
+
+      // Notify parent for toast
+      var host = window.parent !== window ? window.parent : window.opener;
+      if (host) {
+        try {
+          host.postMessage({
+            type: 'courseapi-event',
+            event: 'record',
+            verb: statement.verb,
+            objectName: statement.object.name || statement.object.id,
+            correct: statement.result ? statement.result.correct : undefined,
+            score: statement.result ? statement.result.score : undefined,
+            response: statement.result ? statement.result.response : undefined
+          }, '*');
+        } catch (e) {}
+      }
     }
   };
 })();

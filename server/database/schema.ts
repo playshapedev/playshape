@@ -21,18 +21,51 @@ export const skills = sqliteTable('skills', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
-// ─── Activities ──────────────────────────────────────────────────────────────
-// The `definition` column stores the activity's full structure as JSON.
-// The shape varies by `type` — validated at the application layer via Zod
-// discriminated unions.
+// ─── Courses ─────────────────────────────────────────────────────────────────
+// A course groups activities into a deliverable learning experience within a
+// project. Each course can optionally reference an interface template that
+// provides the navigation wrapper (branding, lesson nav, SCORM/xAPI hooks).
 
-export const activities = sqliteTable('activities', {
+export const courses = sqliteTable('courses', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  type: text('type').notNull(), // e.g. 'branching-scenario', 'role-play', 'assessment'
+  description: text('description'),
+  templateId: text('template_id').references(() => templates.id, { onDelete: 'set null' }),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Course Sections ─────────────────────────────────────────────────────────
+// Sections group activities within a course. Every course has at least one
+// section (created automatically). When there is only one section, its title
+// is null and the section UI is hidden — activities appear as a flat list.
+
+export const courseSections = sqliteTable('course_sections', {
+  id: text('id').primaryKey(),
+  courseId: text('course_id').notNull().references(() => courses.id, { onDelete: 'cascade' }),
+  title: text('title'), // null for the default (only) section
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Activities ──────────────────────────────────────────────────────────────
+// Each activity belongs to a course section and is backed by an activity
+// template (which provides the Vue component and input field definitions).
+// The `data` column stores the filled-in field values for this specific
+// activity instance. The `messages` column persists the AI chat history.
+
+export const activities = sqliteTable('activities', {
+  id: text('id').primaryKey(),
+  sectionId: text('section_id').notNull().references(() => courseSections.id, { onDelete: 'cascade' }),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'restrict' }),
+  name: text('name').notNull(),
   description: text('description').default(''),
-  definition: text('definition', { mode: 'json' }),
+  data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
+  messages: text('messages', { mode: 'json' }).$type<TemplateMessage[]>(),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })

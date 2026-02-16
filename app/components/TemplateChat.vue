@@ -1,25 +1,94 @@
 <script setup lang="ts">
 import type { UIMessage } from 'ai'
+import type { Chat } from '@ai-sdk/vue'
 
-const props = defineProps<{
-  templateId: string
+/**
+ * Tool indicator configuration: maps tool part types to their display info.
+ * Each entry defines what to show while a tool is running and when it completes.
+ */
+export interface ToolIndicator {
+  /** Label shown while the tool is executing */
+  loadingLabel: string | ((input: Record<string, unknown>) => string)
+  /** Label shown when execution completes successfully */
+  doneLabel?: string | ((input: Record<string, unknown>, output: Record<string, unknown>) => string)
+  /** Icon shown on completion (defaults to check-circle) */
+  doneIcon?: string
+  /** Whether to show the failure state with retry messaging */
+  showFailure?: boolean
+  /** Label shown on failure */
+  failLabel?: string
+}
+
+const props = withDefaults(defineProps<{
+  /** Template ID — used by the default template chat mode */
+  templateId?: string
+  /** Initial messages to hydrate the chat */
   initialMessages: UIMessage[]
-}>()
+  /** External chat instance — when provided, templateId is ignored */
+  chatInstance?: {
+    chat: Chat<UIMessage>
+    sendMessage: (content: string) => void
+    stopGeneration: () => Promise<void>
+    reportPreviewError: (error: string) => void
+  }
+  /** Tool part types that indicate an "update" action (triggers the 'update' emit) */
+  updateToolTypes?: string[]
+  /** Tool indicator config — maps tool part type (e.g. 'tool-update_template') to display config */
+  toolIndicators?: Record<string, ToolIndicator>
+  /** Placeholder text for the input */
+  placeholder?: string
+  /** Empty state message */
+  emptyMessage?: string
+}>(), {
+  templateId: undefined,
+  chatInstance: undefined,
+  updateToolTypes: () => ['tool-update_template', 'tool-patch_component'],
+  toolIndicators: () => ({
+    'tool-update_template': {
+      loadingLabel: 'Updating template...',
+      doneLabel: 'Template updated',
+      showFailure: true,
+      failLabel: 'Patch failed — retrying...',
+    },
+    'tool-patch_component': {
+      loadingLabel: 'Patching component...',
+      doneLabel: 'Template updated',
+      showFailure: true,
+      failLabel: 'Patch failed — retrying...',
+    },
+    'tool-get_template': {
+      loadingLabel: 'Reading template...',
+    },
+    'tool-get_reference': {
+      loadingLabel: (input: Record<string, unknown>) => `Reading ${input?.topic || 'reference'} docs...`,
+      doneLabel: (input: Record<string, unknown>) => `Loaded ${input?.topic || 'reference'} docs`,
+      doneIcon: 'i-lucide-book-open',
+    },
+  }),
+  placeholder: 'Describe your activity...',
+  emptyMessage: 'Describe the activity you want to build.',
+})
 
 const emit = defineEmits<{
   update: []
 }>()
 
-const {
-  chat,
-  sendMessage,
-  stopGeneration,
-  onTemplateUpdate,
-  reportPreviewError,
-} = useTemplateChat(props.templateId, props.initialMessages)
+// Support both internal (template) and external (activity) chat instances
+const templateChat = props.chatInstance
+  ? null
+  : useTemplateChat(props.templateId!, props.initialMessages)
 
-// Wire up the onFinish callback to emit update events
-onTemplateUpdate.value = () => emit('update')
+const chat: Chat<UIMessage> = props.chatInstance ? props.chatInstance.chat : templateChat!.chat
+const sendMessage: (content: string) => void = props.chatInstance ? props.chatInstance.sendMessage : templateChat!.sendMessage
+const stopGeneration: () => Promise<void> = props.chatInstance ? props.chatInstance.stopGeneration : templateChat!.stopGeneration
+const reportPreviewError: (error: string) => void = props.chatInstance ? props.chatInstance.reportPreviewError : templateChat!.reportPreviewError
+
+// Wire up the onFinish callback to emit update events.
+// For external chat instances the parent wires onFinish directly — we still emit
+// 'update' by watching for update-tool completions in the messages.
+if (templateChat) {
+  templateChat.onTemplateUpdate.value = () => emit('update')
+}
 
 // Expose reportPreviewError so the parent page can forward preview errors
 defineExpose({ reportPreviewError })
@@ -170,7 +239,7 @@ function handleRetry() {
   const msgs = chat.messages
   for (let i = msgs.length - 1; i >= 0; i--) {
     if (msgs[i]!.role === 'user') {
-      const textPart = msgs[i]!.parts.find(p => p.type === 'text') as { type: 'text'; text: string } | undefined
+      const textPart = msgs[i]!.parts.find((p: { type: string }) => p.type === 'text') as { type: 'text'; text: string } | undefined
       if (textPart?.text) {
         // Remove the failed user message so it doesn't duplicate
         chat.messages.splice(i)
@@ -347,7 +416,7 @@ watch(() => visibleMessages.value.length, (count) => {
         <div v-if="!visibleMessages.length && chat.status === 'ready'" class="flex-1 flex flex-col items-center justify-center text-center">
           <UIcon name="i-lucide-message-square" class="size-8 text-muted mb-2" />
           <p class="text-sm text-muted">
-            Describe the activity you want to build.
+            {{ emptyMessage }}
           </p>
         </div>
 
@@ -376,13 +445,54 @@ watch(() => visibleMessages.value.length, (count) => {
                 <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
                 <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
 
-                <!-- Template update: in progress -->
+                <!-- Tool indicators (driven by toolIndicators prop) -->
+                <template v-else-if="part.type.startsWith('tool-') && part.type !== 'tool-ask_question' && toolIndicators[part.type]">
+                  <!-- Tool in progress -->
+                  <div
+                    v-if="(part as any).state !== 'output-available'"
+                    class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                  >
+                    <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                    {{ typeof toolIndicators[part.type]!.loadingLabel === 'function'
+                      ? (toolIndicators[part.type]!.loadingLabel as Function)((part as any).input ?? {})
+                      : toolIndicators[part.type]!.loadingLabel }}
+                  </div>
+
+                  <!-- Tool complete with failure detection -->
+                  <div
+                    v-else-if="toolIndicators[part.type]!.showFailure && (part as any).output?.success === false"
+                    class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+                  >
+                    <UIcon name="i-lucide-alert-circle" class="size-3.5 text-warning" />
+                    {{ toolIndicators[part.type]!.failLabel || 'Failed — retrying...' }}
+                  </div>
+
+                  <!-- Tool complete (success) — only show if doneLabel is defined -->
+                  <div
+                    v-else-if="toolIndicators[part.type]!.doneLabel"
+                    class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
+                  >
+                    <UIcon
+                      :name="toolIndicators[part.type]!.doneIcon || 'i-lucide-check-circle'"
+                      class="size-3.5 text-success"
+                    />
+                    {{ typeof toolIndicators[part.type]!.doneLabel === 'function'
+                      ? (toolIndicators[part.type]!.doneLabel as Function)((part as any).input ?? {}, (part as any).output ?? {})
+                      : toolIndicators[part.type]!.doneLabel }}
+                  </div>
+
+                  <!-- Tool complete with no doneLabel — render nothing (silent completion) -->
+                </template>
+
+                <!-- Tool indicators for tools NOT in config — silently skip -->
+
+                <!-- Ask question indicator -->
                 <div
-                  v-else-if="(part.type === 'tool-update_template' || part.type === 'tool-patch_component') && (part as any).state !== 'output-available'"
+                  v-else-if="part.type === 'tool-ask_question'"
                   class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
                 >
-                  <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
-                  {{ part.type === 'tool-patch_component' ? 'Patching component...' : 'Updating template...' }}
+                  <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
+                  {{ (part as any).input?.question || 'Asked a question' }}
                 </div>
 
                 <!-- Template update: complete -->
@@ -532,7 +642,7 @@ watch(() => visibleMessages.value.length, (count) => {
       <div class="flex items-end gap-2">
         <UTextarea
           v-model="input"
-          placeholder="Describe your activity..."
+          :placeholder="placeholder"
           class="flex-1"
           autoresize
           :rows="1"

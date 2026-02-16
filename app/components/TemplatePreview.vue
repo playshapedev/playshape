@@ -77,6 +77,39 @@ const iframeReady = ref(false)
 const iframeFocused = ref(false)
 const previewError = ref<string | null>(null)
 
+// ─── CourseAPI Toast ─────────────────────────────────────────────────────────
+
+interface CourseApiToast {
+  event: string
+  score?: number | null
+  // record-specific fields
+  verb?: string
+  objectName?: string
+  correct?: boolean
+  response?: string
+  visible: boolean
+}
+
+const courseApiToast = ref<CourseApiToast>({ event: '', visible: false })
+let courseApiToastTimer: ReturnType<typeof setTimeout> | undefined
+
+function showCourseApiToast(data: Record<string, unknown>) {
+  clearTimeout(courseApiToastTimer)
+  const duration = data.event === 'record' ? 2000 : 3000
+  courseApiToast.value = {
+    event: data.event as string,
+    score: data.score as number | null | undefined,
+    verb: data.verb as string | undefined,
+    objectName: data.objectName as string | undefined,
+    correct: data.correct as boolean | undefined,
+    response: data.response as string | undefined,
+    visible: true,
+  }
+  courseApiToastTimer = setTimeout(() => {
+    courseApiToast.value.visible = false
+  }, duration)
+}
+
 // ─── Popup Window ────────────────────────────────────────────────────────────
 
 const popupWindow = ref<Window | null>(null)
@@ -507,6 +540,9 @@ function onIframeMessage(event: MessageEvent) {
     previewError.value = null
     emit('error', null)
   }
+  else if (event.data?.type === 'courseapi-event') {
+    showCourseApiToast(event.data)
+  }
 }
 
 // Track iframe focus: when the user clicks into the iframe, the parent window
@@ -847,6 +883,59 @@ defineExpose({ generateThumbnail })
           <p class="text-xs text-dimmed mt-1">Start a conversation to generate a template</p>
         </div>
       </template>
+
+      <!-- CourseAPI event toast -->
+      <Transition
+        enter-active-class="transition duration-200 ease-out"
+        enter-from-class="opacity-0 translate-y-2"
+        enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition duration-300 ease-in"
+        leave-from-class="opacity-100 translate-y-0"
+        leave-to-class="opacity-0 translate-y-2"
+      >
+        <div
+          v-if="courseApiToast.visible"
+          :key="courseApiToast.event + '-' + Date.now()"
+          class="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg shadow-lg text-xs font-medium"
+          :class="courseApiToast.event === 'record'
+            ? (courseApiToast.correct === true ? 'bg-green-500/90 text-white'
+              : courseApiToast.correct === false ? 'bg-red-500/90 text-white'
+              : 'bg-neutral-700/90 text-white')
+            : (courseApiToast.event === 'complete' ? 'bg-green-500/90 text-white' : 'bg-red-500/90 text-white')"
+        >
+          <!-- Icon -->
+          <UIcon
+            :name="courseApiToast.event === 'record'
+              ? (courseApiToast.correct === true ? 'i-lucide-check'
+                : courseApiToast.correct === false ? 'i-lucide-x'
+                : 'i-lucide-activity')
+              : (courseApiToast.event === 'complete' ? 'i-lucide-check-circle' : 'i-lucide-x-circle')"
+            class="size-3.5"
+          />
+
+          <!-- Complete / Fail label -->
+          <span v-if="courseApiToast.event !== 'record'">
+            {{ courseApiToast.event === 'complete' ? 'Complete' : 'Failed' }}
+            <template v-if="courseApiToast.score != null">
+              &middot; Score: {{ Math.round(courseApiToast.score * 100) }}%
+            </template>
+          </span>
+
+          <!-- Record label -->
+          <span v-else>
+            {{ courseApiToast.verb }}
+            <template v-if="courseApiToast.objectName">
+              &middot; {{ courseApiToast.objectName }}
+            </template>
+            <template v-if="courseApiToast.response">
+              &middot; "{{ courseApiToast.response.length > 30 ? courseApiToast.response.slice(0, 30) + '...' : courseApiToast.response }}"
+            </template>
+            <template v-if="courseApiToast.score != null">
+              &middot; {{ Math.round(courseApiToast.score * 100) }}%
+            </template>
+          </span>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>

@@ -4,48 +4,9 @@ import type { UIMessage } from 'ai'
 import { eq } from 'drizzle-orm'
 import { templates } from '~~/server/database/schema'
 import type { TemplateField, TemplateDependency } from '~~/server/database/schema'
-
-// ── Reference file storage key map for the get_reference tool ────────────────
-// Maps topic names to their storage keys under assets:ui-references
-const REFERENCE_KEY_MAP: Record<string, string> = {
-  'overview': 'SKILL.md',
-  'components': 'references:components.md',
-  'theming': 'references:theming.md',
-  'composables': 'references:composables.md',
-  'layout-dashboard': 'references:layouts:dashboard.md',
-  'layout-page': 'references:layouts:page.md',
-  'layout-chat': 'references:layouts:chat.md',
-  'layout-docs': 'references:layouts:docs.md',
-  'layout-editor': 'references:layouts:editor.md',
-}
-
-// Field type enum shared across all nesting levels
-const fieldTypeEnum = z.enum(['text', 'textarea', 'dropdown', 'checkbox', 'number', 'color', 'array'])
-
-// Base properties shared by all field levels
-const baseFieldProps = {
-  id: z.string().describe('Unique field identifier (camelCase)'),
-  type: fieldTypeEnum.describe('Input field type'),
-  label: z.string().describe('Human-readable field label'),
-  required: z.boolean().optional().describe('Whether the field is required'),
-  placeholder: z.string().optional().describe('Placeholder text for text/textarea'),
-  options: z.array(z.string()).optional().describe('Options for dropdown fields'),
-  default: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional().describe('Default value for non-array fields'),
-  min: z.number().optional().describe('Minimum value for number fields'),
-  max: z.number().optional().describe('Maximum value for number fields'),
-}
-
-// Explicit depth-limited field schemas (3 levels) to avoid z.lazy() / $ref
-// which many OpenAI-compatible providers reject in tool definitions.
-const leafFieldSchema = z.object({ ...baseFieldProps })
-const midFieldSchema = z.object({
-  ...baseFieldProps,
-  fields: z.array(leafFieldSchema).optional().describe('Sub-field definitions for array type (deepest level)'),
-})
-const fieldSchema = z.object({
-  ...baseFieldProps,
-  fields: z.array(midFieldSchema).optional().describe('Sub-field definitions for array type. Each item in the array will have these fields.'),
-})
+import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { getReferenceTool } from '~~/server/utils/tools/getReference'
+import { fieldSchema } from '~~/server/utils/tools/fieldSchema'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -121,40 +82,11 @@ export default defineLazyEventHandler(() => {
       messages: convertedMessages,
       stopWhen: stepCountIs(5),
       tools: {
-        get_reference: tool({
-          description: 'Fetch UI component and design system documentation. Call this before building complex interfaces (forms, dashboards, data displays, chat UIs). Returns markdown documentation for the requested topic.',
-          inputSchema: z.object({
-            topic: z.enum([
-              'overview',
-              'components',
-              'theming',
-              'composables',
-              'layout-dashboard',
-              'layout-page',
-              'layout-chat',
-              'layout-docs',
-              'layout-editor',
-            ]).describe('The documentation topic to fetch'),
-          }),
-          execute: async ({ topic }) => {
-            try {
-              const key = REFERENCE_KEY_MAP[topic]
-              if (!key) return { topic, error: `Unknown reference topic: ${topic}` }
-              const content = await useStorage('assets:ui-references').getItem<string>(key)
-              if (!content) return { topic, error: `Reference file not found: ${key}` }
-              return { topic, content }
-            }
-            catch (err: unknown) {
-              const message = err instanceof Error ? err.message : 'Failed to read reference file'
-              return { topic, error: message }
-            }
-          },
-        }),
+        get_reference: getReferenceTool,
         get_template: tool({
           description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes.',
           inputSchema: z.object({}),
           execute: async () => {
-            // Re-fetch to get the latest state (may have been updated by a previous step)
             const current = db.select().from(templates).where(eq(templates.id, id)).get()
             if (!current) return { error: 'Template not found' }
             return {
@@ -169,16 +101,7 @@ export default defineLazyEventHandler(() => {
             }
           },
         }),
-        ask_question: tool({
-          description: 'Ask the user a structured multiple-choice question. The UI will display buttons for each option.',
-          inputSchema: z.object({
-            question: z.string().describe('The question to ask the user'),
-            options: z.array(z.object({
-              label: z.string().describe('Short button label (1-5 words)'),
-              value: z.string().describe('The value to return when selected'),
-            })).min(2).max(8).describe('Available choices'),
-          }),
-        }),
+        ask_question: askQuestionTool,
         update_template: tool({
           description: updateTemplateDescription,
           inputSchema: z.object({

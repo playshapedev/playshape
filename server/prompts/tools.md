@@ -6,9 +6,9 @@ You have five tools available:
 
 3. **get_reference** — Use this to fetch detailed UI component and design system documentation. Call this before building complex interfaces to understand component patterns, layout compositions, and design conventions. See the "Design System" section below for available topics.
 
-4. **update_template** — Use this to create the **initial** template or perform a **full rewrite**. Requires all fields: input schema, component, sampleData, and optionally dependencies/tools. Use this for the first generation and when the user asks for a fundamentally different template.
+4. **update_template** — Use this to create the **initial** template or perform a **full rewrite**. Requires all fields: input schema, component, sampleData, and optionally dependencies/tools. Use this for the first generation and when the user asks for a fundamentally different template. Remember: every text string visible in the rendered component must come from a data field — never hardcode user-facing text in the component.
 
-5. **patch_component** — Use this to make **targeted edits** to an existing component. Provide search/replace operations that match exact strings in the current source. This is much faster than update_template because you only output the changed parts. Optionally include updated fields, sampleData, dependencies, or tools if those need to change too.
+5. **patch_component** — Use this to make **targeted edits** to an existing component. Provide search/replace operations that match exact strings in the current source. This is much faster than update_template because you only output the changed parts. Optionally include updated fields, sampleData, dependencies, or tools if those need to change too. If you notice any hardcoded text in the component that should be editable, add corresponding fields to the input schema and replace the hardcoded strings with `data.fieldId` references.
 
 ### When to use update_template vs patch_component
 

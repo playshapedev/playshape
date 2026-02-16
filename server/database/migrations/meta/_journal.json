@@ -78,6 +78,20 @@
       "when": 1771262010795,
       "tag": "0010_add_brand_is_default",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1771279155936,
+      "tag": "0011_add_courses_and_sections",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1771280896149,
+      "tag": "0012_activity_template_data_messages",
+      "breakpoints": true
     }
   ]
 }

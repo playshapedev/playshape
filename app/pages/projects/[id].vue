@@ -9,9 +9,19 @@ const { setTitle } = useNavbar()
 const projectId = route.params.id as string
 const { project, pending, error, refresh } = useProject(projectId)
 
-// Set dynamic navbar title from project name
-watch(() => project.value?.name, (name) => {
-  if (name) setTitle(name)
+// Only show project-level actions on direct tab pages, not deeper sub-routes
+// (e.g. hide when viewing a course detail at /projects/:id/courses/:courseId)
+const isDirectTabPage = computed(() => {
+  const segments = route.path.replace(/\/$/, '').split('/')
+  // /projects/:id = 3 segments, /projects/:id/courses = 4, /projects/:id/courses/:courseId = 5
+  return segments.length <= 4
+})
+
+// Set dynamic navbar title from project name.
+// Re-set on route change so title restores after sub-pages (e.g. course detail)
+// override it, then the user navigates back to a direct tab page.
+watch([() => project.value?.name, isDirectTabPage], ([name, isDirect]) => {
+  if (name && isDirect) setTitle(name)
 }, { immediate: true })
 
 // ─── Provide project data to child tab pages ─────────────────────────────────
@@ -78,8 +88,8 @@ async function handleSave() {
 </script>
 
 <template>
-  <!-- Navbar actions -->
-  <Teleport defer to="#navbar-actions">
+  <!-- Navbar actions (only on direct tab pages, not sub-routes like course detail) -->
+  <Teleport v-if="isDirectTabPage" defer to="#navbar-actions">
     <UButton
       icon="i-lucide-pencil"
       color="neutral"
@@ -160,7 +170,7 @@ async function handleSave() {
   <ConfirmModal
     v-model:open="showDeleteModal"
     title="Delete Project"
-    description="Are you sure you want to delete this project? All activities, skills, and library links will be permanently removed."
+    description="Are you sure you want to delete this project? All courses, skills, and library links will be permanently removed."
     confirm-label="Delete"
     confirm-color="error"
     :loading="deleting"
