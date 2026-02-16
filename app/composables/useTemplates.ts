@@ -28,6 +28,7 @@ export async function updateTemplate(id: string, data: {
   sampleData?: Record<string, unknown>
   dependencies?: Array<{ name: string; url: string; global: string }>
   messages?: unknown
+  thumbnail?: string | null
   status?: 'draft' | 'published'
 }) {
   return $fetch<Template>(`/api/templates/${id}`, {

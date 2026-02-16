@@ -139,6 +139,8 @@ export const templates = sqliteTable('templates', {
   tools: text('tools', { mode: 'json' }).$type<string[]>(),
   // Chat conversation history for resuming AI-assisted editing
   messages: text('messages', { mode: 'json' }).$type<TemplateMessage[]>(),
+  // Base64-encoded PNG thumbnail captured from an offscreen Electron BrowserWindow
+  thumbnail: text('thumbnail'),
   status: text('status').notNull().default('draft'), // 'draft' | 'published'
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

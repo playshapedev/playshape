@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, nativeImage, nativeTheme, net, screen, uti
 import type { UtilityProcess } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import os from 'node:os'
 import { createServer } from 'node:net'
 
 // The built directory structure
@@ -282,6 +283,101 @@ async function createWindow() {
   // Inspect element at coordinates (dev only)
   ipcMain.on('inspect-element', (_event, x: number, y: number) => {
     mainWindow?.webContents.inspectElement(x, y)
+  })
+
+  // ── Thumbnail generation ────────────────────────────────────────────────────
+  // Creates a hidden offscreen BrowserWindow, loads the template's iframe HTML,
+  // sends the SFC + data via executeJavaScript, waits for the component to mount,
+  // then captures a screenshot using webContents.capturePage().
+  // Returns a base64-encoded JPEG data URL (small file size for card thumbnails).
+  //
+  // Key implementation detail: The srcdoc HTML loads external CDN scripts (Vue,
+  // Tailwind, vue3-sfc-loader). A `data:` URL cannot load external sub-resources
+  // in Electron, so we write the HTML to a temp file and load that via `file://`.
+  // We use `did-finish-load` (not `dom-ready`) to wait for all scripts to load,
+  // then poll for `window.Vue` before sending the component to mount.
+  ipcMain.handle('generate-thumbnail', async (_event, args: {
+    srcdoc: string
+    sfc: string
+    data: Record<string, unknown>
+    depMappings: Record<string, string>
+  }) => {
+    const THUMBNAIL_WIDTH = 800
+    const THUMBNAIL_HEIGHT = 600
+    const CAPTURE_TIMEOUT = 20000 // 20s max wait for render
+
+    // Write srcdoc to a temp file — data: URLs block external script loading
+    const tmpFile = path.join(os.tmpdir(), `playshape-thumb-${Date.now()}.html`)
+    fs.writeFileSync(tmpFile, args.srcdoc, 'utf-8')
+
+    const offscreen = new BrowserWindow({
+      width: THUMBNAIL_WIDTH,
+      height: THUMBNAIL_HEIGHT,
+      show: false,
+      webPreferences: {
+        offscreen: true,
+        contextIsolation: false, // Needed so executeJavaScript runs in the page context
+        nodeIntegration: false,
+      },
+    })
+
+    try {
+      const result = await new Promise<string>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          reject(new Error('Thumbnail capture timed out'))
+        }, CAPTURE_TIMEOUT)
+
+        offscreen.webContents.on('did-finish-load', async () => {
+          try {
+            // Poll until Vue and vue3-sfc-loader are available (CDN scripts loaded)
+            const maxWait = 10000
+            const start = Date.now()
+            while (Date.now() - start < maxWait) {
+              const ready = await offscreen.webContents.executeJavaScript(
+                `!!(window.Vue && window['vue3-sfc-loader'])`,
+              )
+              if (ready) break
+              await new Promise(r => setTimeout(r, 200))
+            }
+
+            // Send the update message — the page's message listener calls mountComponent
+            await offscreen.webContents.executeJavaScript(`
+              window.postMessage({
+                type: 'update',
+                sfc: ${JSON.stringify(args.sfc)},
+                data: ${JSON.stringify(args.data)},
+                depMappings: ${JSON.stringify(args.depMappings)}
+              }, '*');
+            `)
+
+            // Wait for the component to mount and render (Tailwind JIT needs time too)
+            await new Promise(r => setTimeout(r, 2000))
+
+            // Capture the page
+            const image = await offscreen.webContents.capturePage()
+            const jpeg = image.toJPEG(80) // 80% quality
+            const dataUrl = `data:image/jpeg;base64,${jpeg.toString('base64')}`
+
+            clearTimeout(timeout)
+            resolve(dataUrl)
+          }
+          catch (err) {
+            clearTimeout(timeout)
+            reject(err)
+          }
+        })
+
+        // Load the temp file
+        offscreen.loadFile(tmpFile)
+      })
+
+      return result
+    }
+    finally {
+      offscreen.destroy()
+      // Clean up temp file
+      try { fs.unlinkSync(tmpFile) } catch {}
+    }
   })
 
   // Show/hide macOS traffic light buttons (close/minimize/fullscreen)

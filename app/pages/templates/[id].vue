@@ -100,6 +100,7 @@ async function handleClearChat() {
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
+const templatePreviewRef = ref<{ generateThumbnail: () => Promise<string | null> } | null>(null)
 
 // Capture initial messages once so the prop reference stays stable across refresh().
 // TemplateChat only uses initialMessages in the Chat constructor — it doesn't need
@@ -240,6 +241,32 @@ function onPreviewError(error: string | null) {
     templateChatRef.value?.reportPreviewError(error)
   }
 }
+
+// ─── Thumbnail Generation ────────────────────────────────────────────────────
+
+/**
+ * Called when the `update_template` tool fires (@update from TemplateChat).
+ * Refreshes template data, then generates and saves a thumbnail.
+ */
+async function onTemplateUpdated() {
+  await refresh()
+  // Generate thumbnail in the background — don't block the UI
+  generateAndSaveThumbnail()
+}
+
+async function generateAndSaveThumbnail() {
+  if (!template.value?.id || !template.value.component) return
+  try {
+    const thumbnail = await templatePreviewRef.value?.generateThumbnail()
+    if (thumbnail) {
+      await updateTemplate(template.value.id, { thumbnail })
+    }
+  }
+  catch (err) {
+    // Thumbnail generation is non-critical — log and move on
+    console.warn('[Thumbnail] Generation failed:', err)
+  }
+}
 </script>
 
 <template>
@@ -314,7 +341,7 @@ function onPreviewError(error: string | null) {
         ref="templateChatRef"
         :template-id="template.id"
         :initial-messages="initialChatMessages"
-        @update="refresh()"
+        @update="onTemplateUpdated"
       />
     </div>
 
@@ -331,6 +358,7 @@ function onPreviewError(error: string | null) {
       <!-- Drag overlay: prevents the iframe from stealing pointer events during resize -->
       <div v-if="isDragging" class="absolute inset-0 z-10" />
       <TemplatePreview
+        ref="templatePreviewRef"
         :component-source="template.component || ''"
         :data="formData"
         :dependencies="(template.dependencies as any[]) || []"

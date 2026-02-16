@@ -5,6 +5,12 @@ interface ElectronAPI {
   appReady: () => void;
   inspectElement: (x: number, y: number) => void;
   setTrafficLightsVisible: (visible: boolean) => void;
+  generateThumbnail: (args: {
+    srcdoc: string;
+    sfc: string;
+    data: Record<string, unknown>;
+    depMappings: Record<string, string>;
+  }) => Promise<string>;
 }
 
 const electronAPI = ref<ElectronAPI | null>(null);

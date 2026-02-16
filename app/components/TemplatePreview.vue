@@ -480,6 +480,44 @@ watch(appIsDark, (dark) => {
   if (previewDarkOverride.value !== null) return // independent, don't sync
   syncThemeToIframe(dark)
 })
+
+/**
+ * Generate a thumbnail for this template using Electron's offscreen rendering.
+ * Returns a base64-encoded JPEG data URL, or null if not in Electron or if
+ * the component source is empty.
+ */
+async function generateThumbnail(): Promise<string | null> {
+  const electron = (window as unknown as { electron?: { generateThumbnail: (args: {
+    srcdoc: string
+    sfc: string
+    data: Record<string, unknown>
+    depMappings: Record<string, string>
+  }) => Promise<string> } }).electron
+
+  if (!electron || !props.componentSource) return null
+
+  const depMappings: Record<string, string> = {
+    ...toRaw(toolModuleMappings.value),
+  }
+  for (const dep of (props.dependencies || [])) {
+    depMappings[dep.name] = dep.global
+  }
+
+  try {
+    return await electron.generateThumbnail({
+      srcdoc: iframeSrcdoc.value,
+      sfc: props.componentSource,
+      data: JSON.parse(JSON.stringify(props.data)),
+      depMappings,
+    })
+  }
+  catch (err) {
+    console.error('[TemplatePreview] Thumbnail generation failed:', err)
+    return null
+  }
+}
+
+defineExpose({ generateThumbnail })
 </script>
 
 <template>

@@ -11,6 +11,7 @@ const updateTemplateSchema = z.object({
   dependencies: z.any().optional(),
   tools: z.array(z.string()).optional(),
   messages: z.any().optional(),
+  thumbnail: z.string().optional().nullable(),
   status: z.enum(['draft', 'published']).optional(),
 })
 

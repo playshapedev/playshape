@@ -8,8 +8,31 @@ defineProps<{
 
 <template>
   <NuxtLink :to="`/templates/${template.id}`" class="block">
-    <UCard class="hover:ring-primary/50 hover:ring-2 transition-all cursor-pointer h-full">
-      <div class="space-y-2">
+    <UCard
+      class="hover:ring-primary/50 hover:ring-2 transition-all cursor-pointer h-full overflow-hidden"
+      :ui="{ body: 'p-0' }"
+    >
+      <!-- Thumbnail -->
+      <div
+        v-if="template.thumbnail"
+        class="aspect-video w-full overflow-hidden bg-elevated"
+      >
+        <img
+          :src="template.thumbnail"
+          :alt="template.name"
+          class="w-full h-full object-cover object-top"
+        >
+      </div>
+      <!-- Placeholder when no thumbnail -->
+      <div
+        v-else
+        class="aspect-video w-full flex items-center justify-center bg-elevated"
+      >
+        <UIcon name="i-lucide-layout-template" class="size-8 text-dimmed" />
+      </div>
+
+      <!-- Card body -->
+      <div class="p-4 space-y-2">
         <div class="flex items-center gap-2">
           <h3 class="font-semibold text-highlighted truncate">
             {{ template.name }}

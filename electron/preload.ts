@@ -17,6 +17,16 @@ contextBridge.exposeInMainWorld('electron', {
   inspectElement: (x: number, y: number) => ipcRenderer.send('inspect-element', x, y),
   /** Show or hide the macOS traffic light buttons. */
   setTrafficLightsVisible: (visible: boolean) => ipcRenderer.send('set-traffic-lights-visible', visible),
+  /**
+   * Generate a thumbnail for a template using an offscreen BrowserWindow.
+   * Returns a base64-encoded JPEG data URL.
+   */
+  generateThumbnail: (args: {
+    srcdoc: string
+    sfc: string
+    data: Record<string, unknown>
+    depMappings: Record<string, string>
+  }) => ipcRenderer.invoke('generate-thumbnail', args) as Promise<string>,
 })
 
 // Mark the platform on <html> so CSS can apply platform-specific styles
