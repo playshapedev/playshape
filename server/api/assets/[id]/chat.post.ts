@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { assets } from '~~/server/database/schema'
 import { generateImage, getImageModelConfig, useActiveImageModel } from '~~/server/utils/imageGeneration'
 import { generateAssetFilename, saveAssetFile, getAssetUrl } from '~~/server/utils/assetStorage'
-import { createLanguageModel } from '~~/server/utils/llm'
+import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 
 const SYSTEM_PROMPT = `You are an AI assistant helping users create and edit images. Your role is to:
 
@@ -38,6 +38,21 @@ export default defineLazyEventHandler(() => {
         statusCode: 400,
         statusMessage: `Invalid request: expected "messages" array, got ${typeof messages}`,
       })
+    }
+
+    // Patch ask_question tool calls that have no result.
+    // The ask_question tool is client-side only (no execute), so tool results
+    // may not be in the message history. convertToModelMessages requires every
+    // tool call to have a result, so we inject a synthetic one.
+    for (const msg of messages) {
+      if (msg.role !== 'assistant') continue
+      for (const part of msg.parts) {
+        const p = part as Record<string, unknown>
+        if (p.type === 'tool-ask_question' && p.state !== 'output-available') {
+          p.state = 'output-available'
+          p.output = p.output ?? { answered: true }
+        }
+      }
     }
 
     const db = useDb()
@@ -84,6 +99,7 @@ export default defineLazyEventHandler(() => {
       stopWhen: stepCountIs(3),
       maxOutputTokens: 2048,
       tools: {
+        ask_question: askQuestionTool,
         get_asset: tool({
           description: 'Get the current asset details including name, dimensions, prompt used, and file URL.',
           inputSchema: z.object({}),

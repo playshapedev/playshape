@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UIMessage } from 'ai'
-import type { AIProviderWithModels, AIProviderType } from '~/composables/useAIProviders'
+import type { AIProviderType } from '~/composables/useAIProviders'
 
 const props = defineProps<{
   assetId: string
@@ -72,13 +72,70 @@ onAssetUpdate.value = () => emit('update')
 const isRunning = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
 
 const input = ref('')
+const customAnswer = ref('')
+const showCustomInput = ref(false)
+const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
+
+/**
+ * Find the pending ask_question tool call from the last assistant message.
+ */
+const pendingQuestion = computed(() => {
+  const msgs = chat.messages
+  if (!msgs.length) return null
+  const last = msgs[msgs.length - 1]
+  if (!last || last.role !== 'assistant') return null
+
+  for (const part of last.parts) {
+    if (part.type === 'tool-ask_question') {
+      const p = part as { state: string; toolCallId: string; input: { question: string; options: Array<{ label: string; value: string }> } }
+      if (p.state === 'input-available') {
+        return {
+          toolCallId: p.toolCallId,
+          question: p.input.question,
+          options: p.input.options,
+        }
+      }
+    }
+  }
+  return null
+})
 
 function handleSend() {
   if (!input.value.trim() || chat.status !== 'ready') return
   const text = input.value.trim()
   input.value = ''
   sendMessage(text)
+}
+
+function handleAnswer(value: string) {
+  const q = pendingQuestion.value
+  if (!q) return
+  const selectedLabel = q.options.find(o => o.value === value)?.label || value
+  showCustomInput.value = false
+  customAnswer.value = ''
+  sendMessage(selectedLabel)
+}
+
+function openCustomInput() {
+  showCustomInput.value = true
+  customAnswer.value = ''
+  nextTick(() => {
+    customInputRef.value?.el?.focus()
+  })
+}
+
+function submitCustomAnswer() {
+  if (!customAnswer.value.trim()) return
+  const text = customAnswer.value.trim()
+  showCustomInput.value = false
+  customAnswer.value = ''
+  sendMessage(text)
+}
+
+function cancelCustomInput() {
+  showCustomInput.value = false
+  customAnswer.value = ''
 }
 
 function formatError(error: Error): string {
@@ -113,11 +170,28 @@ watch(() => chat.messages.length, () => {
   })
 })
 
-// Keyboard shortcut: Escape to stop
+// Keyboard shortcuts: number keys for question options, Escape to stop
 function onKeyDown(e: KeyboardEvent) {
+  // Escape stops generation
   if (e.key === 'Escape' && isRunning.value) {
     e.preventDefault()
     stopGeneration()
+    return
+  }
+
+  // Number keys for question options
+  if (!pendingQuestion.value || chat.status === 'streaming' || showCustomInput.value) return
+  const num = parseInt(e.key)
+  const totalOptions = pendingQuestion.value.options.length + 1 // +1 for "Type answer"
+  if (num >= 1 && num <= totalOptions) {
+    e.preventDefault()
+    if (num <= pendingQuestion.value.options.length) {
+      const option = pendingQuestion.value.options[num - 1]!
+      handleAnswer(option.value)
+    }
+    else {
+      openCustomInput()
+    }
   }
 }
 
@@ -223,6 +297,15 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
                 <span class="text-error">{{ (part as any).output?.error || 'Generation failed' }}</span>
               </div>
 
+              <!-- Ask question indicator (shown in message history) -->
+              <div
+                v-else-if="part.type === 'tool-ask_question'"
+                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-2"
+              >
+                <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
+                {{ (part as any).input?.question || 'Asked a question' }}
+              </div>
+
               <!-- Get asset: silently ignore -->
             </template>
           </div>
@@ -262,8 +345,58 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       </div>
     </div>
 
-    <!-- Input -->
-    <div class="border-t border-default p-4">
+    <!-- Question buttons (replaces input when AI asks a question) -->
+    <div v-if="pendingQuestion" class="border-t border-default p-4 space-y-3">
+      <p class="text-sm font-medium">{{ pendingQuestion.question }}</p>
+      <div class="flex flex-wrap gap-2">
+        <UButton
+          v-for="(option, index) in pendingQuestion.options"
+          :key="option.value"
+          variant="soft"
+          color="neutral"
+          :disabled="showCustomInput"
+          @click="handleAnswer(option.value)"
+        >
+          <UKbd :value="String(index + 1)" size="sm" class="mr-1" />
+          {{ option.label }}
+        </UButton>
+        <UButton
+          variant="soft"
+          color="primary"
+          :disabled="showCustomInput"
+          @click="openCustomInput"
+        >
+          <UKbd :value="String(pendingQuestion.options.length + 1)" size="sm" class="mr-1" />
+          Type my own answer
+        </UButton>
+      </div>
+
+      <!-- Custom answer input -->
+      <div v-if="showCustomInput" class="flex gap-2">
+        <UInput
+          ref="customInputRef"
+          v-model="customAnswer"
+          placeholder="Type your answer..."
+          class="flex-1"
+          @keydown.enter="submitCustomAnswer"
+          @keydown.escape="cancelCustomInput"
+        />
+        <UButton
+          icon="i-lucide-send"
+          :disabled="!customAnswer.trim()"
+          @click="submitCustomAnswer"
+        />
+        <UButton
+          icon="i-lucide-x"
+          variant="ghost"
+          color="neutral"
+          @click="cancelCustomInput"
+        />
+      </div>
+    </div>
+
+    <!-- Text input (hidden when question is pending) -->
+    <div v-else class="border-t border-default p-4">
       <div class="flex items-end gap-2">
         <UTextarea
           v-model="input"
