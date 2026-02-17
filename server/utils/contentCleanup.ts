@@ -1,4 +1,4 @@
-import { generateObject } from 'ai'
+import { generateText } from 'ai'
 import { z } from 'zod'
 import { useActiveModel } from './llm'
 import { getContentCleanupEnabled } from './settings'
@@ -47,12 +47,21 @@ Write a summary that:
 - Captures the main topic, purpose, and key points of the document
 - Helps someone decide if they need to read the full document
 - Uses plain language, avoiding jargon unless domain-specific terms are essential
-- Does NOT start with "This document..." — just state what it covers directly`
+- Does NOT start with "This document..." — just state what it covers directly
+
+## Output Format
+
+You MUST respond with a valid JSON object containing exactly these three fields:
+- "cleanedText": The cleaned document text with artifacts removed
+- "suggestedTitle": A better title for the document, or the original if already good  
+- "summary": A 2-4 sentence summary of the document content
+
+Do not include any text before or after the JSON object. Do not use markdown code blocks.`
 
 const cleanupSchema = z.object({
-  cleanedText: z.string().describe('The cleaned document text with artifacts removed'),
-  suggestedTitle: z.string().describe('A better title for the document, or the original if already good'),
-  summary: z.string().describe('A 2-4 sentence summary of the document content'),
+  cleanedText: z.string(),
+  suggestedTitle: z.string(),
+  summary: z.string(),
 })
 
 export interface CleanupResult {
@@ -88,13 +97,24 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
       ? `Current title: "${currentTitle}"\n\nDocument text:\n${text}`
       : `Document text:\n${text}`
 
-    const { object } = await generateObject({
+    const { text: responseText } = await generateText({
       model,
-      schema: cleanupSchema,
       system: CLEANUP_PROMPT,
       prompt,
       maxOutputTokens: Math.min(text.length * 2, 16000), // Generous but bounded
     })
+
+    // Parse JSON from the response
+    // Try to extract JSON if wrapped in markdown code blocks
+    let jsonStr = responseText.trim()
+    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
+    if (jsonMatch) {
+      jsonStr = jsonMatch[1]!.trim()
+    }
+
+    // Parse and validate
+    const parsed = JSON.parse(jsonStr)
+    const object = cleanupSchema.parse(parsed)
 
     // Sanity check: if the cleaned text is drastically shorter, something went wrong
     if (object.cleanedText.length < text.length * 0.3) {
