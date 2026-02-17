@@ -244,8 +244,10 @@ function getFireworksModelsFallback(): ModelInfo[] {
     { id: 'accounts/fireworks/models/llama4-scout-instruct-basic', name: 'Llama 4 Scout', description: 'Fast and efficient', purpose: 'text' },
     { id: 'accounts/fireworks/models/deepseek-v3', name: 'DeepSeek V3', description: 'Strong coding and reasoning', purpose: 'text' },
     { id: 'accounts/fireworks/models/qwen3-235b-a22b', name: 'Qwen 3 235B', description: 'Large multilingual model', purpose: 'text' },
-    { id: 'accounts/fireworks/models/flux-kontext-pro', name: 'FLUX Kontext Pro', description: 'High quality image editing', purpose: 'image' },
-    { id: 'accounts/fireworks/models/flux-kontext-max', name: 'FLUX Kontext Max', description: 'Maximum quality images', purpose: 'image' },
+    { id: 'accounts/fireworks/models/flux-1-schnell-fp8', name: 'FLUX Schnell', description: 'Fastest text-to-image', purpose: 'image' },
+    { id: 'accounts/fireworks/models/flux-1-dev-fp8', name: 'FLUX Dev', description: 'High quality text-to-image', purpose: 'image' },
+    { id: 'accounts/fireworks/models/flux-kontext-pro', name: 'FLUX Kontext Pro', description: 'Image editing (requires input image)', purpose: 'image' },
+    { id: 'accounts/fireworks/models/flux-kontext-max', name: 'FLUX Kontext Max', description: 'Max quality editing (requires input image)', purpose: 'image' },
   ]
 }
 
