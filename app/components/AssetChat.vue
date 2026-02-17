@@ -76,6 +76,7 @@ const customAnswer = ref('')
 const showCustomInput = ref(false)
 const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
+const innerWrapperRef = ref<HTMLElement | null>(null)
 
 /**
  * Find the pending ask_question tool call from the last assistant message.
@@ -161,13 +162,76 @@ function handleRetry() {
   }
 }
 
-// Auto-scroll when new messages arrive
-watch(() => chat.messages.length, () => {
-  nextTick(() => {
-    if (messagesContainer.value) {
-      messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+// ─── Bottom-anchored scroll layout ───────────────────────────────────────────
+// Messages are pushed to the bottom when content is short (via flex justify-end).
+// A spacer after the messages provides enough room to scroll the last user message
+// to the top of the viewport — the same pattern used by ChatGPT and Claude.
+
+const SPACER_PADDING = 40 // px of breathing room below the scrollable area
+const containerHeight = ref(0)
+const spacerHeight = ref(0)
+let containerObserver: ResizeObserver | null = null
+let contentObserver: ResizeObserver | null = null
+let lastContentHeight = 0
+
+/**
+ * Recalculate the bottom spacer height based on the last user message's position.
+ */
+function updateSpacerHeight() {
+  if (!messagesContainer.value || !innerWrapperRef.value) {
+    spacerHeight.value = 0
+    return
+  }
+
+  // Find the last user message element
+  const msgs = chat.messages
+  let lastUserMsg: typeof msgs[0] | undefined
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i]!.role === 'user') {
+      lastUserMsg = msgs[i]
+      break
     }
-  })
+  }
+
+  if (!lastUserMsg) {
+    spacerHeight.value = 0
+    return
+  }
+
+  const el = messagesContainer.value.querySelector(`[data-message-id="${lastUserMsg.id}"]`) as HTMLElement | null
+  if (!el) {
+    spacerHeight.value = 0
+    return
+  }
+
+  const msgTop = el.offsetTop
+  const viewportHeight = containerHeight.value
+  const contentWithoutSpacer = innerWrapperRef.value.scrollHeight - spacerHeight.value
+  const needed = Math.max(0, msgTop + viewportHeight - contentWithoutSpacer - SPACER_PADDING)
+
+  spacerHeight.value = needed
+}
+
+// Scroll user's latest message to the top of the view when they send one
+let lastMessageCount = chat.messages.length
+
+watch(() => chat.messages.length, (count) => {
+  if (count > lastMessageCount) {
+    const lastMsg = chat.messages[count - 1]
+    if (lastMsg?.role === 'user') {
+      nextTick(() => {
+        updateSpacerHeight()
+        if (!messagesContainer.value) return
+        nextTick(() => {
+          const el = messagesContainer.value!.querySelector(`[data-message-id="${lastMsg.id}"]`) as HTMLElement | null
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
+        })
+      })
+    }
+  }
+  lastMessageCount = count
 })
 
 // Keyboard shortcuts: number keys for question options, Escape to stop
@@ -195,8 +259,66 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => window.addEventListener('keydown', onKeyDown))
-onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+
+  if (messagesContainer.value) {
+    // Track container (viewport) height for spacer calculations
+    containerObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerHeight.value = entry.contentRect.height
+      }
+      updateSpacerHeight()
+    })
+    containerObserver.observe(messagesContainer.value)
+  }
+
+  if (innerWrapperRef.value) {
+    // Track content height changes (e.g., during LLM streaming) to shrink the spacer
+    contentObserver = new ResizeObserver(() => {
+      if (!innerWrapperRef.value) return
+      const contentHeight = innerWrapperRef.value.scrollHeight - spacerHeight.value
+      if (Math.abs(contentHeight - lastContentHeight) < 1) return
+      lastContentHeight = contentHeight
+      updateSpacerHeight()
+    })
+    contentObserver.observe(innerWrapperRef.value)
+  }
+
+  // Restored conversations: scroll to the bottom after MDC renders
+  if (chat.messages.length && messagesContainer.value) {
+    const container = messagesContainer.value
+    let debounceTimer: ReturnType<typeof setTimeout>
+
+    const scrollToBottom = () => {
+      updateSpacerHeight()
+      nextTick(() => {
+        container.scrollTop = container.scrollHeight
+      })
+    }
+
+    const observer = new MutationObserver(() => {
+      clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => {
+        observer.disconnect()
+        scrollToBottom()
+      }, 150)
+    })
+
+    observer.observe(container, { childList: true, subtree: true, characterData: true })
+
+    debounceTimer = setTimeout(() => {
+      observer.disconnect()
+      scrollToBottom()
+    }, 150)
+  }
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeyDown)
+  containerObserver?.disconnect()
+  contentObserver?.disconnect()
+})
 </script>
 
 <template>
@@ -235,18 +357,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
       </UDropdownMenu>
     </div>
 
-    <!-- Messages -->
-    <div ref="messagesContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
-      <!-- Empty state -->
-      <div v-if="!chat.messages.length && chat.status === 'ready'" class="h-full flex flex-col items-center justify-center text-center">
-        <UIcon name="i-lucide-image" class="size-8 text-muted mb-2" />
-        <p class="text-sm text-muted">
-          Describe the image you want to create.
-        </p>
-      </div>
+    <!-- Messages (scroll container) -->
+    <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden">
+      <!-- Inner wrapper: min-h-full + justify-end pushes messages to the bottom
+           when content is shorter than the viewport (like mainstream chat UIs) -->
+      <div ref="innerWrapperRef" class="relative min-h-full flex flex-col justify-end p-4 space-y-4">
+        <!-- Empty state -->
+        <div v-if="!chat.messages.length && chat.status === 'ready'" class="flex-1 flex flex-col items-center justify-center text-center">
+          <UIcon name="i-lucide-image" class="size-8 text-muted mb-2" />
+          <p class="text-sm text-muted">
+            Describe the image you want to create.
+          </p>
+        </div>
 
-      <!-- Message list -->
-      <div v-for="msg in chat.messages" :key="msg.id" :data-message-id="msg.id">
+        <!-- Message list -->
+        <div v-for="msg in chat.messages" :key="msg.id" :data-message-id="msg.id">
         <div
           class="flex gap-2"
           :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
@@ -342,6 +467,11 @@ onUnmounted(() => window.removeEventListener('keydown', onKeyDown))
             @click="chat.clearError()"
           />
         </div>
+      </div>
+
+        <!-- Bottom spacer: provides scrollable room so the last user message
+             can be scrolled to the top of the viewport -->
+        <div v-if="chat.messages.length && spacerHeight > 0" :style="{ minHeight: spacerHeight + 'px' }" aria-hidden="true" />
       </div>
     </div>
 
