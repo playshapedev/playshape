@@ -128,42 +128,78 @@ export const projectLibraries = sqliteTable('project_libraries', {
   primaryKey({ columns: [table.projectId, table.libraryId] }),
 ])
 
-// ─── LLM Providers ───────────────────────────────────────────────────────────
-// Configured LLM providers. Users can set up multiple providers (Ollama,
-// LM Studio, OpenAI, Anthropic, Fireworks AI) and mark one as active for generation.
-// API keys are stored here for now; will migrate to OS secure storage
-// (Electron safeStorage / Capacitor Keychain) once the IPC layer is built.
+// ─── AI Providers ────────────────────────────────────────────────────────────
+// Configured AI providers. Each provider type (Ollama, OpenAI, Fireworks, etc.)
+// has one entry storing the API key and base URL. Models are stored separately
+// in aiModels table, allowing multiple models per provider with one API key.
 
-/** Canonical list of supported LLM provider types. Add new providers here. */
-export const LLM_PROVIDER_TYPES = ['ollama', 'lmstudio', 'openai', 'anthropic', 'fireworks'] as const
-export type LLMProviderType = (typeof LLM_PROVIDER_TYPES)[number]
+/** Canonical list of supported AI provider types. Add new providers here. */
+export const AI_PROVIDER_TYPES = ['ollama', 'lmstudio', 'openai', 'anthropic', 'fireworks', 'replicate', 'fal'] as const
+export type AIProviderType = (typeof AI_PROVIDER_TYPES)[number]
 
-export const llmProviders = sqliteTable('llm_providers', {
+export const aiProviders = sqliteTable('ai_providers', {
   id: text('id').primaryKey(),
-  name: text('name').notNull(), // user-given label, e.g. "My Local Ollama"
-  type: text('type').$type<LLMProviderType>().notNull(),
+  type: text('type').$type<AIProviderType>().notNull().unique(), // one row per provider type
+  name: text('name').notNull(), // user-given label, e.g. "My Fireworks Account"
   baseUrl: text('base_url'), // for local providers; null uses provider default
   apiKey: text('api_key'), // for cloud providers; TODO: migrate to secure storage
-  model: text('model').notNull(), // model identifier, e.g. 'llama3.2', 'gpt-5', 'claude-sonnet-4-0'
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── AI Models ───────────────────────────────────────────────────────────────
+// Enabled models under each provider. Each model has a purpose (text or image)
+// and one model per purpose can be marked active for generation.
+
+/** Model purpose - text generation (LLM) or image generation */
+export const AI_MODEL_PURPOSES = ['text', 'image'] as const
+export type AIModelPurpose = (typeof AI_MODEL_PURPOSES)[number]
+
+export const aiModels = sqliteTable('ai_models', {
+  id: text('id').primaryKey(),
+  providerId: text('provider_id').notNull().references(() => aiProviders.id, { onDelete: 'cascade' }),
+  modelId: text('model_id').notNull(), // model identifier, e.g. 'gpt-4o', 'flux-kontext-pro'
+  name: text('name').notNull(), // display name, e.g. 'GPT-4o', 'FLUX Kontext Pro'
+  purpose: text('purpose').$type<AIModelPurpose>().notNull(), // 'text' or 'image'
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false), // one active per purpose
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Legacy Tables (to be migrated) ──────────────────────────────────────────
+// These tables are kept for backwards compatibility during migration.
+// TODO: Remove after data migration is complete.
+
+/** @deprecated Use AI_PROVIDER_TYPES instead */
+export const LLM_PROVIDER_TYPES = ['ollama', 'lmstudio', 'openai', 'anthropic', 'fireworks'] as const
+/** @deprecated Use AIProviderType instead */
+export type LLMProviderType = (typeof LLM_PROVIDER_TYPES)[number]
+
+/** @deprecated Use aiProviders and aiModels instead */
+export const llmProviders = sqliteTable('llm_providers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  type: text('type').$type<LLMProviderType>().notNull(),
+  baseUrl: text('base_url'),
+  apiKey: text('api_key'),
+  model: text('model').notNull(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
-// ─── Image Providers ─────────────────────────────────────────────────────────
-// Configured image generation providers. Users can set up multiple providers
-// and mark one as active for image generation tasks.
-
-/** Canonical list of supported image provider types. Add new providers here. */
+/** @deprecated Use AI_PROVIDER_TYPES instead */
 export const IMAGE_PROVIDER_TYPES = ['openai', 'replicate', 'fal', 'fireworks'] as const
+/** @deprecated Use AIProviderType instead */
 export type ImageProviderType = (typeof IMAGE_PROVIDER_TYPES)[number]
 
+/** @deprecated Use aiProviders and aiModels instead */
 export const imageProviders = sqliteTable('image_providers', {
   id: text('id').primaryKey(),
-  name: text('name').notNull(), // user-given label, e.g. "OpenAI DALL-E"
+  name: text('name').notNull(),
   type: text('type').$type<ImageProviderType>().notNull(),
-  apiKey: text('api_key'), // API key for the provider
-  model: text('model').notNull(), // model identifier, e.g. 'dall-e-3', 'flux-pro'
+  apiKey: text('api_key'),
+  model: text('model').notNull(),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),

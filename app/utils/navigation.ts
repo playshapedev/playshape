@@ -79,8 +79,7 @@ export const navigation: NavItem[] = [
     icon: 'i-lucide-settings',
     tabs: [
       { path: '', label: 'Preferences', icon: 'i-lucide-sliders-horizontal' },
-      { path: 'providers', label: 'LLM Providers', icon: 'i-lucide-bot' },
-      { path: 'image-providers', label: 'Image Providers', icon: 'i-lucide-image' },
+      { path: 'ai', label: 'AI Providers', icon: 'i-lucide-bot' },
       { path: 'branding', label: 'Branding', icon: 'i-lucide-palette' },
       { path: 'data', label: 'Data', icon: 'i-lucide-database' },
     ],

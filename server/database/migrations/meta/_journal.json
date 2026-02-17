@@ -106,6 +106,13 @@
       "when": 1771303837833,
       "tag": "0014_add_image_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "6",
+      "when": 1771304641468,
+      "tag": "0015_add_unified_ai_providers",
+      "breakpoints": true
     }
   ]
 }

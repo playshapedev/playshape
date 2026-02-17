@@ -1,12 +1,12 @@
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { createOllama } from 'ollama-ai-provider-v2'
 import { createFireworks } from '@ai-sdk/fireworks'
-import { llmProviders } from '../database/schema'
+import { aiProviders, aiModels, llmProviders } from '../database/schema'
 
-type ProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks'
+type ProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks' | 'replicate' | 'fal'
 
 interface ProviderConfig {
   type: ProviderType
@@ -76,27 +76,89 @@ export function createLanguageModel(config: ProviderConfig): any {
 }
 
 /**
- * Fetches the active LLM provider from the database.
- *
- * Returns the full provider row or `null` if no provider is marked active.
- * Use `useActiveModel()` instead if you need a ready-to-use AI SDK model.
+ * Fetches the active text model from the new unified schema.
+ * Falls back to the legacy llmProviders table if no new-style model is found.
  */
-export function useActiveProvider() {
+export function useActiveTextModel() {
   const db = useDb()
-  const provider = db
+
+  // Try new schema first: find active text model and its provider
+  const activeModel = db
+    .select()
+    .from(aiModels)
+    .where(and(eq(aiModels.purpose, 'text'), eq(aiModels.isActive, true)))
+    .get()
+
+  if (activeModel) {
+    const provider = db
+      .select()
+      .from(aiProviders)
+      .where(eq(aiProviders.id, activeModel.providerId))
+      .get()
+
+    if (provider) {
+      return {
+        provider,
+        model: activeModel,
+        config: {
+          type: provider.type as ProviderType,
+          baseUrl: provider.baseUrl,
+          apiKey: provider.apiKey,
+          model: activeModel.modelId,
+        },
+      }
+    }
+  }
+
+  // Fall back to legacy schema
+  const legacyProvider = db
     .select()
     .from(llmProviders)
     .where(eq(llmProviders.isActive, true))
     .get()
 
-  return provider ?? null
+  if (legacyProvider) {
+    return {
+      provider: legacyProvider,
+      model: null,
+      config: {
+        type: legacyProvider.type as ProviderType,
+        baseUrl: legacyProvider.baseUrl,
+        apiKey: legacyProvider.apiKey,
+        model: legacyProvider.model,
+      },
+    }
+  }
+
+  return null
 }
 
 /**
- * Returns a ready-to-use AI SDK model from the active LLM provider.
+ * @deprecated Use useActiveTextModel() instead
+ */
+export function useActiveProvider() {
+  const result = useActiveTextModel()
+  if (!result) return null
+
+  // Return in legacy format for backwards compatibility
+  return {
+    id: result.provider.id,
+    type: result.config.type,
+    baseUrl: result.config.baseUrl,
+    apiKey: result.config.apiKey,
+    model: result.config.model,
+    isActive: true,
+    name: result.provider.name,
+    createdAt: result.provider.createdAt,
+    updatedAt: result.provider.updatedAt,
+  }
+}
+
+/**
+ * Returns a ready-to-use AI SDK model from the active text model.
  *
  * This is the primary function generation routes should call. It:
- * 1. Fetches the active provider from the database
+ * 1. Fetches the active text model from the database (new or legacy schema)
  * 2. Creates the appropriate AI SDK model instance
  * 3. Throws a descriptive 409 error if no provider is configured/active
  *
@@ -107,21 +169,16 @@ export function useActiveProvider() {
  * ```
  */
 export function useActiveModel() {
-  const provider = useActiveProvider()
+  const result = useActiveTextModel()
 
-  if (!provider) {
+  if (!result) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'No active LLM provider configured. Go to Settings to add and activate a provider.',
+      statusMessage: 'No active text model configured. Go to Settings > AI Providers to configure a text model.',
     })
   }
 
-  const model = createLanguageModel({
-    type: provider.type as ProviderType,
-    baseUrl: provider.baseUrl,
-    apiKey: provider.apiKey,
-    model: provider.model,
-  })
+  const model = createLanguageModel(result.config)
 
-  return { model, provider }
+  return { model, provider: result.provider }
 }
