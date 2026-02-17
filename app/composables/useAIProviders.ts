@@ -152,7 +152,7 @@ export const AI_PROVIDER_META: Record<AIProviderType, {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export function getActiveTextModel(providers: AIProviderWithModels[] | null) {
+export function getActiveTextModel(providers: AIProviderWithModels[] | null | undefined) {
   if (!providers) return null
   for (const provider of providers) {
     const active = provider.models.find(m => m.purpose === 'text' && m.isActive)
@@ -161,7 +161,7 @@ export function getActiveTextModel(providers: AIProviderWithModels[] | null) {
   return null
 }
 
-export function getActiveImageModel(providers: AIProviderWithModels[] | null) {
+export function getActiveImageModel(providers: AIProviderWithModels[] | null | undefined) {
   if (!providers) return null
   for (const provider of providers) {
     const active = provider.models.find(m => m.purpose === 'image' && m.isActive)

@@ -163,7 +163,8 @@ export default defineLazyEventHandler(() => {
 
             // Apply operations sequentially
             for (let i = 0; i < operations.length; i++) {
-              const { search, replace } = operations[i]
+              const op = operations[i]!
+              const { search, replace } = op
 
               // Count occurrences
               const firstIdx = patched.indexOf(search)
