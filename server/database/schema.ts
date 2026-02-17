@@ -295,6 +295,41 @@ export const brands = sqliteTable('brands', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+// ─── Assets ──────────────────────────────────────────────────────────────────
+// User-uploaded or AI-generated media files. Currently supports images, with
+// audio planned for future. Files are stored on disk; this table stores metadata
+// and the relative path to the file.
+
+/** Canonical list of asset types. Add new types here as they are supported. */
+export const ASSET_TYPES = ['image', 'audio'] as const
+export type AssetType = (typeof ASSET_TYPES)[number]
+
+export const assets = sqliteTable('assets', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }), // nullable for global assets
+  type: text('type').$type<AssetType>().notNull().default('image'),
+  name: text('name').notNull(),
+  prompt: text('prompt'), // generation prompt if AI-generated
+  storagePath: text('storage_path').notNull(), // relative path within assets directory
+  mimeType: text('mime_type'),
+  width: integer('width'), // for images
+  height: integer('height'), // for images
+  fileSize: integer('file_size'), // bytes
+  messages: text('messages', { mode: 'json' }).$type<AssetMessage[]>().default([]),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+export interface AssetMessage {
+  role: 'user' | 'assistant'
+  content: string
+  toolInvocations?: Array<{
+    toolName: string
+    args: Record<string, unknown>
+    result?: unknown
+  }>
+}
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 // Key-value store for app settings. General preferences live here.
 

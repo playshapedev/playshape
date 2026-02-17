@@ -74,6 +74,14 @@ export const navigation: NavItem[] = [
     ],
   },
   {
+    path: '/assets',
+    title: 'Assets',
+    icon: 'i-lucide-image',
+    children: [
+      { path: '/assets/:id', title: 'Asset' },
+    ],
+  },
+  {
     path: '/settings',
     title: 'Settings',
     icon: 'i-lucide-settings',

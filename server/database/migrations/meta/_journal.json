@@ -113,6 +113,13 @@
       "when": 1771304641468,
       "tag": "0015_add_unified_ai_providers",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "6",
+      "when": 1771306557665,
+      "tag": "0016_add_assets_table",
+      "breakpoints": true
     }
   ]
 }
