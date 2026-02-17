@@ -1,30 +1,16 @@
 <script setup lang="ts">
-import type { LLMProvider } from '~/composables/useLLMProviders'
+import type { ImageProvider, ImageProviderType } from '~/composables/useImageProviders'
 
 const toast = useToast()
 
-// ─── Settings ────────────────────────────────────────────────────────────────
-
-const { settings, updateSettings } = useSettings()
-
-async function toggleContentCleanup() {
-  const newValue = !settings.value?.contentCleanupEnabled
-  await updateSettings({ contentCleanupEnabled: newValue })
-  toast.add({
-    title: newValue ? 'Content cleanup enabled' : 'Content cleanup disabled',
-    color: 'success',
-    icon: 'i-lucide-check',
-  })
-}
-
 // ─── Provider Data ───────────────────────────────────────────────────────────
 
-const { providers, pending, refresh } = useLLMProviders()
+const { providers, pending, refresh } = useImageProviders()
 
 // ─── Add/Edit Modal ──────────────────────────────────────────────────────────
 
 const formModalOpen = ref(false)
-const editingProvider = ref<LLMProvider | null>(null)
+const editingProvider = ref<ImageProvider | null>(null)
 const saving = ref(false)
 
 function openAddModal() {
@@ -32,28 +18,27 @@ function openAddModal() {
   formModalOpen.value = true
 }
 
-function openEditModal(provider: LLMProvider) {
+function openEditModal(provider: ImageProvider) {
   editingProvider.value = provider
   formModalOpen.value = true
 }
 
 async function onFormSubmit(data: {
   name: string
-  type: LLMProviderType
-  baseUrl: string | null
+  type: ImageProviderType
   apiKey: string | null
   model: string
 }) {
   saving.value = true
   try {
     if (editingProvider.value) {
-      await updateLLMProvider(editingProvider.value.id, data)
+      await updateImageProvider(editingProvider.value.id, data)
       toast.add({ title: 'Provider updated', color: 'success', icon: 'i-lucide-check' })
     }
     else {
       // First provider is automatically active
       const isFirst = !providers.value || providers.value.length === 0
-      await createLLMProvider({ ...data, isActive: isFirst } as Parameters<typeof createLLMProvider>[0])
+      await createImageProvider({ ...data, isActive: isFirst } as Parameters<typeof createImageProvider>[0])
       toast.add({ title: 'Provider added', color: 'success', icon: 'i-lucide-check' })
     }
     formModalOpen.value = false
@@ -71,10 +56,10 @@ async function onFormSubmit(data: {
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
 const deleteModalOpen = ref(false)
-const deletingProvider = ref<LLMProvider | null>(null)
+const deletingProvider = ref<ImageProvider | null>(null)
 const deleting = ref(false)
 
-function confirmDelete(provider: LLMProvider) {
+function confirmDelete(provider: ImageProvider) {
   deletingProvider.value = provider
   deleteModalOpen.value = true
 }
@@ -83,7 +68,7 @@ async function onDelete() {
   if (!deletingProvider.value) return
   deleting.value = true
   try {
-    await deleteLLMProvider(deletingProvider.value.id)
+    await deleteImageProvider(deletingProvider.value.id)
     toast.add({ title: 'Provider deleted', color: 'success', icon: 'i-lucide-check' })
     deleteModalOpen.value = false
     await refresh()
@@ -99,9 +84,9 @@ async function onDelete() {
 
 // ─── Activate ────────────────────────────────────────────────────────────────
 
-async function onActivate(provider: LLMProvider) {
+async function onActivate(provider: ImageProvider) {
   try {
-    await activateLLMProvider(provider.id)
+    await activateImageProvider(provider.id)
     toast.add({ title: `${provider.name} is now active`, color: 'success', icon: 'i-lucide-check-circle' })
     await refresh()
   }
@@ -110,43 +95,15 @@ async function onActivate(provider: LLMProvider) {
     console.error(error)
   }
 }
-
-// ─── Test ────────────────────────────────────────────────────────────────────
-
-const testingId = ref<string | null>(null)
-
-async function onTest(provider: LLMProvider) {
-  testingId.value = provider.id
-  try {
-    await testLLMProvider({
-      type: provider.type as Parameters<typeof testLLMProvider>[0]['type'],
-      baseUrl: provider.baseUrl,
-      apiKey: provider.apiKey,
-      model: provider.model,
-    })
-    toast.add({ title: `${provider.name} connected successfully`, color: 'success', icon: 'i-lucide-check-circle' })
-  }
-  catch (error: unknown) {
-    let message = 'Connection test failed'
-    if (error && typeof error === 'object' && 'data' in error) {
-      const data = (error as { data?: { message?: string } }).data
-      message = data?.message || message
-    }
-    toast.add({ title: message, color: 'error', icon: 'i-lucide-x-circle' })
-  }
-  finally {
-    testingId.value = null
-  }
-}
 </script>
 
 <template>
   <div class="max-w-5xl">
     <div class="flex items-center justify-between mb-4">
       <div>
-        <h2 class="text-lg font-semibold">LLM Providers</h2>
+        <h2 class="text-lg font-semibold">Image Providers</h2>
         <p class="text-sm text-muted">
-          Configure language models for activity generation. You can add multiple providers and switch between them.
+          Configure image generation models. You can add multiple providers and switch between them.
         </p>
       </div>
       <UButton
@@ -166,9 +123,9 @@ async function onTest(provider: LLMProvider) {
     <!-- Empty State -->
     <EmptyState
       v-else-if="!providers?.length"
-      icon="i-lucide-bot"
+      icon="i-lucide-image"
       title="No providers configured"
-      description="Add an LLM provider to start generating AI-powered activities."
+      description="Add an image provider to enable AI image generation."
     >
       <UButton
         icon="i-lucide-plus"
@@ -179,43 +136,14 @@ async function onTest(provider: LLMProvider) {
 
     <!-- Provider List -->
     <div v-else class="space-y-3">
-      <ProviderCard
+      <ImageProviderCard
         v-for="provider in providers"
         :key="provider.id"
         :provider="provider"
         @edit="openEditModal(provider)"
         @delete="confirmDelete(provider)"
         @activate="onActivate(provider)"
-        @test="onTest(provider)"
       />
-    </div>
-
-    <!-- AI Features Section -->
-    <div class="mt-10 pt-8 border-t border-default">
-      <div class="mb-4">
-        <h2 class="text-lg font-semibold">AI Features</h2>
-        <p class="text-sm text-muted">
-          Configure how AI is used throughout the app.
-        </p>
-      </div>
-
-      <div class="flex items-start justify-between gap-4 p-4 rounded-lg bg-elevated">
-        <div>
-          <div class="font-medium">Content Cleanup</div>
-          <p class="text-sm text-muted mt-1">
-            When importing documents to a library, use AI to clean up extracted text by removing page numbers, headers, footers, copyright notices, and other artifacts.
-          </p>
-        </div>
-        <USwitch
-          :model-value="settings?.contentCleanupEnabled ?? false"
-          :disabled="!providers?.length"
-          @update:model-value="toggleContentCleanup"
-        />
-      </div>
-
-      <p v-if="!providers?.length" class="text-xs text-muted mt-2">
-        Add an LLM provider above to enable AI features.
-      </p>
     </div>
   </div>
 
@@ -223,10 +151,10 @@ async function onTest(provider: LLMProvider) {
   <UModal
     v-model:open="formModalOpen"
     :title="editingProvider ? 'Edit Provider' : 'Add Provider'"
-    :description="editingProvider ? 'Update this provider\'s configuration.' : 'Configure a new AI provider for activity generation.'"
+    :description="editingProvider ? 'Update this provider\'s configuration.' : 'Configure a new image generation provider.'"
   >
     <template #body>
-      <ProviderForm
+      <ImageProviderForm
         :provider="editingProvider"
         @submit="onFormSubmit"
         @cancel="formModalOpen = false"

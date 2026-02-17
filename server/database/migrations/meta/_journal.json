@@ -99,6 +99,13 @@
       "when": 1771298977080,
       "tag": "0013_add_document_summary",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1771303837833,
+      "tag": "0014_add_image_providers",
+      "breakpoints": true
     }
   ]
 }

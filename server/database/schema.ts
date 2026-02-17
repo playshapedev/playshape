@@ -150,6 +150,25 @@ export const llmProviders = sqliteTable('llm_providers', {
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+// ─── Image Providers ─────────────────────────────────────────────────────────
+// Configured image generation providers. Users can set up multiple providers
+// and mark one as active for image generation tasks.
+
+/** Canonical list of supported image provider types. Add new providers here. */
+export const IMAGE_PROVIDER_TYPES = ['openai', 'replicate', 'fal'] as const
+export type ImageProviderType = (typeof IMAGE_PROVIDER_TYPES)[number]
+
+export const imageProviders = sqliteTable('image_providers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(), // user-given label, e.g. "OpenAI DALL-E"
+  type: text('type').$type<ImageProviderType>().notNull(),
+  apiKey: text('api_key'), // API key for the provider
+  model: text('model').notNull(), // model identifier, e.g. 'dall-e-3', 'flux-pro'
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(false),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Templates ───────────────────────────────────────────────────────────────
 // Reusable blueprints created through AI-assisted conversation.
 // Two kinds:
