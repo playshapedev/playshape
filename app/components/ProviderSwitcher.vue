@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LLMProvider } from '~/composables/useLLMProviders'
+import type { AIProviderType } from '~/composables/useAIProviders'
 
 defineProps<{
   collapsed?: boolean
@@ -15,63 +15,82 @@ watch(sidebarVisible, (visible) => {
   if (!visible) dropdownOpen.value = false
 })
 
-const { providers, pending, refresh } = useLLMProviders()
+const { providers, pending, refresh } = useAIProviders()
 
-const activeProvider = computed(() =>
-  providers.value?.find(p => p.isActive) ?? null,
-)
+// Get active text model
+const activeTextModel = computed(() => getActiveTextModel(providers.value))
 
 /**
  * Extract the short model name from a full model path.
  * e.g. "accounts/fireworks/models/kimi-k2p5" -> "kimi-k2p5"
  */
-function shortModelName(model: string): string {
-  return model.split('/').pop() || model
+function shortModelName(modelId: string): string {
+  return modelId.split('/').pop() || modelId
 }
 
 const activeMeta = computed(() => {
-  if (!activeProvider.value) return null
-  return PROVIDER_TYPES[activeProvider.value.type as keyof typeof PROVIDER_TYPES]
+  if (!activeTextModel.value) return null
+  return AI_PROVIDER_META[activeTextModel.value.provider.type as AIProviderType]
 })
 
+// Build menu items from all enabled text models across providers
 const menuItems = computed(() => {
   if (!providers.value?.length) return []
 
-  const providerItems = providers.value.map((p) => {
-    const meta = PROVIDER_TYPES[p.type as keyof typeof PROVIDER_TYPES]
-    return {
-      label: shortModelName(p.model),
-      icon: meta?.icon || 'i-lucide-bot',
-      disabled: p.isActive,
-      suffix: p.isActive ? 'Active' : undefined,
-      onSelect: () => switchProvider(p),
+  const textModelItems: Array<{
+    label: string
+    icon: string
+    disabled?: boolean
+    suffix?: string
+    onSelect: () => void
+  }> = []
+
+  for (const provider of providers.value) {
+    const meta = AI_PROVIDER_META[provider.type as AIProviderType]
+    const textModels = provider.models.filter(m => m.purpose === 'text')
+
+    for (const model of textModels) {
+      textModelItems.push({
+        label: model.name || shortModelName(model.modelId),
+        icon: meta?.icon || 'i-lucide-bot',
+        disabled: model.isActive,
+        suffix: model.isActive ? 'Active' : undefined,
+        onSelect: () => switchModel(model.id),
+      })
     }
-  })
+  }
+
+  if (textModelItems.length === 0) {
+    return [[{
+      label: 'Configure AI Providers',
+      icon: 'i-lucide-settings',
+      onSelect: () => navigateTo('/settings/ai'),
+    }]]
+  }
 
   return [
-    providerItems,
+    textModelItems,
     [{
       label: 'Manage Providers',
       icon: 'i-lucide-settings',
-      onSelect: () => navigateTo('/settings/providers'),
+      onSelect: () => navigateTo('/settings/ai'),
     }],
   ]
 })
 
-async function switchProvider(provider: LLMProvider) {
-  if (provider.isActive) return
+async function switchModel(modelId: string) {
   try {
-    await activateLLMProvider(provider.id)
+    await activateAIModel(modelId)
     await refresh()
     toast.add({
-      title: `Switched to ${shortModelName(provider.model)}`,
+      title: 'Model switched',
       color: 'success',
       icon: 'i-lucide-check-circle',
     })
   }
   catch {
     toast.add({
-      title: 'Failed to switch provider',
+      title: 'Failed to switch model',
       color: 'error',
       icon: 'i-lucide-x-circle',
     })
@@ -84,7 +103,7 @@ async function switchProvider(provider: LLMProvider) {
     <!-- No providers configured -->
     <NuxtLink
       v-if="!pending && !providers?.length"
-      to="/settings/providers"
+      to="/settings/ai"
       class="flex items-center gap-2 px-2 py-1.5 rounded-md text-xs text-muted hover:bg-elevated transition-colors min-w-0"
     >
       <UIcon name="i-lucide-bot" class="size-4 shrink-0" />
@@ -100,11 +119,11 @@ async function switchProvider(provider: LLMProvider) {
         <UIcon
           :name="activeMeta?.icon || 'i-lucide-bot'"
           class="size-4 shrink-0"
-          :class="activeProvider ? 'text-primary' : 'text-muted'"
+          :class="activeTextModel ? 'text-primary' : 'text-muted'"
         />
         <template v-if="!collapsed">
-          <span v-if="activeProvider" class="truncate text-muted">
-            {{ shortModelName(activeProvider.model) }}
+          <span v-if="activeTextModel" class="truncate text-muted">
+            {{ activeTextModel.model.name || shortModelName(activeTextModel.model.modelId) }}
           </span>
           <span v-else class="truncate text-dimmed">
             No active model
