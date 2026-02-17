@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { assets } from '~~/server/database/schema'
+import { assets, type AssetMessage } from '~~/server/database/schema'
 
 /**
  * Update an asset.
@@ -14,6 +14,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     name?: string
     projectId?: string | null
+    messages?: AssetMessage[]
   }>(event)
 
   const db = useDb()
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
   const updates: Record<string, unknown> = { updatedAt: new Date() }
   if (body.name !== undefined) updates.name = body.name
   if (body.projectId !== undefined) updates.projectId = body.projectId
+  if (body.messages !== undefined) updates.messages = body.messages
 
   db.update(assets).set(updates).where(eq(assets.id, id)).run()
 
