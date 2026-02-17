@@ -70,10 +70,16 @@ export interface CleanupResult {
   summary: string | null // null if cleanup disabled or failed
 }
 
+// Maximum characters to send for cleanup (roughly ~30k tokens with buffer for response)
+const MAX_CLEANUP_CHARS = 80000
+
 /**
  * Cleans up extracted document text using the active LLM provider.
  * Removes page numbers, headers/footers, copyright notices, and other artifacts.
  * Also suggests a better title and generates a summary.
+ *
+ * For very large documents, only the first portion is cleaned but summary/title
+ * are still generated from a representative sample.
  *
  * @param text - The raw extracted text to clean up
  * @param currentTitle - The current document title (often derived from filename)
@@ -93,15 +99,20 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
   try {
     const { model } = useActiveModel()
 
+    // For very large documents, we can't clean the whole thing
+    // Truncate for the LLM call, but return original text if too large
+    const isLargeDocument = text.length > MAX_CLEANUP_CHARS
+    const textForLLM = isLargeDocument ? text.slice(0, MAX_CLEANUP_CHARS) : text
+
     const prompt = currentTitle
-      ? `Current title: "${currentTitle}"\n\nDocument text:\n${text}`
-      : `Document text:\n${text}`
+      ? `Current title: "${currentTitle}"\n\nDocument text:\n${textForLLM}`
+      : `Document text:\n${textForLLM}`
 
     const { text: responseText } = await generateText({
       model,
       system: CLEANUP_PROMPT,
       prompt,
-      maxOutputTokens: Math.min(text.length * 2, 16000), // Generous but bounded
+      maxOutputTokens: isLargeDocument ? 2000 : Math.min(textForLLM.length * 2, 16000),
     })
 
     // Parse JSON from the response
@@ -115,6 +126,18 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     // Parse and validate
     const parsed = JSON.parse(jsonStr)
     const object = cleanupSchema.parse(parsed)
+
+    // For large documents, we only get summary/title, not cleaned text
+    if (isLargeDocument) {
+      const suggestedTitle = currentTitle && object.suggestedTitle !== currentTitle
+        ? object.suggestedTitle
+        : null
+      return {
+        text, // Return original text unchanged
+        title: suggestedTitle,
+        summary: object.summary,
+      }
+    }
 
     // Sanity check: if the cleaned text is drastically shorter, something went wrong
     if (object.cleanedText.length < text.length * 0.3) {
