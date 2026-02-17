@@ -61,9 +61,11 @@
     "better-sqlite3": "^12.6.2",
     "drizzle-orm": "^0.45.1",
     "jszip": "^3.10.1",
+    "lz-string": "^1.5.0",
     "mammoth": "^1.11.0",
     "ollama-ai-provider-v2": "^3.3.0",
     "pdf-parse": "^2.4.5",
+    "scorm-again": "^3.0.1",
     "zod": "^4.3.6"
   }
 }

@@ -41,6 +41,9 @@ importers:
       jszip:
         specifier: ^3.10.1
         version: 3.10.1
+      lz-string:
+        specifier: ^1.5.0
+        version: 1.5.0
       mammoth:
         specifier: ^1.11.0
         version: 1.11.0
@@ -50,6 +53,9 @@ importers:
       pdf-parse:
         specifier: ^2.4.5
         version: 2.4.5
+      scorm-again:
+        specifier: ^3.0.1
+        version: 3.0.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -5129,6 +5135,10 @@ packages:
     resolution: {integrity: sha512-Jo6dJ04CmSjuznwJSS3pUeWmd/H0ffTlkXXgwZi+eq1UCmqQwCh+eLsYOYCwY991i2Fah4h1BEMCx4qThGbsiA==}
     engines: {node: '>=10'}
 
+  lz-string@1.5.0:
+    resolution: {integrity: sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ==}
+    hasBin: true
+
   magic-regexp@0.10.0:
     resolution: {integrity: sha512-Uly1Bu4lO1hwHUW0CQeSWuRtzCMNO00CmXtS8N6fyvB3B979GOEEeAkiTUDsmbYLAbvpUS/Kt5c4ibosAzVyVg==}
 
@@ -6355,6 +6365,10 @@ packages:
   sax@1.4.4:
     resolution: {integrity: sha512-1n3r/tGXO6b6VXMdFT54SHzT9ytu9yr7TaELowdYpMqY/Ao7EnlQGmAQ1+RatX7Tkkdm6hONI2owqNx2aZj5Sw==}
     engines: {node: '>=11.0.0'}
+
+  scorm-again@3.0.1:
+    resolution: {integrity: sha512-bO77B88hvAZ78b88/ZUQp3Yr9nhC69qizO06pOzv82qzxRFIKbB3p+4HkOFW19TIsmnBttQ4zENQPSCXqzkPIg==}
+    engines: {node: '>=20.0.0'}
 
   scslre@0.3.0:
     resolution: {integrity: sha512-3A6sD0WYP7+QrjbfNA2FN3FsOaGGFoekCVgTyypy53gPxhbkCIjtO6YWgdrfM+n/8sI8JeXZOIxsHjMTNxQ4nQ==}
@@ -12788,6 +12802,8 @@ snapshots:
     dependencies:
       yallist: 4.0.0
 
+  lz-string@1.5.0: {}
+
   magic-regexp@0.10.0:
     dependencies:
       estree-walker: 3.0.3
@@ -14615,6 +14631,8 @@ snapshots:
       truncate-utf8-bytes: 1.0.2
 
   sax@1.4.4: {}
+
+  scorm-again@3.0.1: {}
 
   scslre@0.3.0:
     dependencies:

@@ -30,6 +30,10 @@ watch(() => course.value?.name, (name) => {
 const sections = computed(() => course.value?.sections ?? [])
 const hasMultipleSections = computed(() => sections.value.length > 1)
 
+// ─── Export ──────────────────────────────────────────────────────────────────
+
+const showExportDialog = ref(false)
+
 // ─── Edit course ─────────────────────────────────────────────────────────────
 
 const showEditModal = ref(false)
@@ -311,6 +315,14 @@ async function handleDeleteActivity() {
 <template>
   <!-- Navbar actions -->
   <Teleport defer to="#navbar-actions">
+    <UButton
+      icon="i-lucide-package"
+      color="neutral"
+      variant="ghost"
+      size="sm"
+      title="Export as SCORM"
+      @click="showExportDialog = true"
+    />
     <UButton
       icon="i-lucide-pencil"
       color="neutral"
@@ -697,5 +709,14 @@ async function handleDeleteActivity() {
     confirm-color="error"
     :loading="deletingActivity"
     @confirm="handleDeleteActivity"
+  />
+
+  <!-- Export dialog -->
+  <ExportDialog
+    v-if="course"
+    v-model:open="showExportDialog"
+    :project-id="projectId"
+    :course-id="courseId"
+    :course-name="course.name"
   />
 </template>

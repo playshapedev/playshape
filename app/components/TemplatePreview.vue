@@ -12,6 +12,7 @@ interface SlotContent {
   sfc: string
   data: Record<string, unknown>
   dependencies?: Dependency[]
+  name?: string
 }
 
 const props = defineProps<{
@@ -389,8 +390,14 @@ ${toolSetupJs.value}
       };
     }
 
+    let activityApp = null; // Separate app for activity mounted in the slot
+
     async function mountComponent(sfcSource, data, slotContent) {
-      // Unmount previous app
+      // Unmount previous apps
+      if (activityApp) {
+        try { activityApp.unmount(); } catch {}
+        activityApp = null;
+      }
       if (currentApp) {
         try { currentApp.unmount(); } catch {}
         currentApp = null;
@@ -417,27 +424,10 @@ ${toolSetupJs.value}
         const mainOptions = makeLoaderOptions(moduleCache, { '/component.vue': sfcSource });
         const MainComp = defineAsyncComponent(() => loadModule('/component.vue', mainOptions));
 
-        // If slotContent is provided, compile the activity SFC and compose them
-        let SlotComp = null;
-        if (slotContent && slotContent.sfc) {
-          // Merge slot dependency mappings into moduleCache
-          const slotModuleCache = { ...moduleCache };
-          if (slotContent.depMappings) {
-            for (const [pkg, globalName] of Object.entries(slotContent.depMappings)) {
-              if (window[globalName]) slotModuleCache[pkg] = window[globalName];
-            }
-          }
-          const slotOptions = makeLoaderOptions(slotModuleCache, { '/activity.vue': slotContent.sfc });
-          SlotComp = defineAsyncComponent(() => loadModule('/activity.vue', slotOptions));
-        }
-
+        // Mount the main component (interface or activity)
         currentApp = createApp({
           render() {
-            const slots = {};
-            if (SlotComp && slotContent) {
-              slots.activity = () => h(SlotComp, { data: slotContent.data || {} });
-            }
-            return h(MainComp, { data }, slots);
+            return h(MainComp, { data });
           }
         });
 
@@ -447,6 +437,57 @@ ${toolSetupJs.value}
         };
 
         currentApp.mount(appEl);
+
+        // If slotContent is provided, mount the activity into the activity slot element
+        // This is for interface templates that use DOM-based activity mounting
+        if (slotContent && slotContent.sfc) {
+          // Wait a tick for the main component to render and create the slot element
+          await new Promise(resolve => setTimeout(resolve, 50));
+
+          const slotEl = document.querySelector('[data-activity-slot]') || document.getElementById('activity-slot');
+          if (slotEl) {
+            // Merge slot dependency mappings into moduleCache
+            const slotModuleCache = { ...moduleCache };
+            if (slotContent.depMappings) {
+              for (const [pkg, globalName] of Object.entries(slotContent.depMappings)) {
+                if (window[globalName]) slotModuleCache[pkg] = window[globalName];
+              }
+            }
+            const slotOptions = makeLoaderOptions(slotModuleCache, { '/activity.vue': slotContent.sfc });
+            const SlotComp = defineAsyncComponent(() => loadModule('/activity.vue', slotOptions));
+
+            // Clear any fallback content
+            slotEl.innerHTML = '';
+
+            // Mount the activity into the slot
+            activityApp = createApp({
+              render() {
+                return h(SlotComp, { data: slotContent.data || {} });
+              }
+            });
+
+            activityApp.config.errorHandler = (err) => {
+              slotEl.innerHTML = '<div class="preview-error">Activity error:\\n' + (err.message || err) + '</div>';
+            };
+
+            activityApp.mount(slotEl);
+
+            // Dispatch playshape:activity-changed event so the interface can update its state
+            window.dispatchEvent(new CustomEvent('playshape:activity-changed', {
+              detail: {
+                sectionIndex: 0,
+                activityIndex: 0,
+                activityId: 'preview-activity',
+                activityName: slotContent.name || 'Preview Activity',
+                sectionTitle: 'Preview',
+                totalActivities: 1,
+                completedActivities: 0,
+                flatIndex: 0
+              }
+            }));
+          }
+        }
+
         postToHost({ type: 'preview-mounted' });
       } catch (err) {
         appEl.innerHTML = '<div class="preview-error">Compile error:\\n' + (err.message || err) + '</div>';
@@ -598,6 +639,7 @@ function buildUpdatePayload() {
       sfc: props.slotContent.sfc,
       data: JSON.parse(JSON.stringify(props.slotContent.data)),
       depMappings: slotDepMappings,
+      name: props.slotContent.name || 'Activity',
     }
   }
   return {

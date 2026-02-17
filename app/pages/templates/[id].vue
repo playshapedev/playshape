@@ -187,6 +187,7 @@ const slotContent = computed(() => {
     sfc: selectedActivity.value.component,
     data: (selectedActivity.value.sampleData as Record<string, unknown>) || {},
     dependencies: (selectedActivity.value.dependencies as Array<{ name: string; url: string; global: string }>) || [],
+    name: selectedActivity.value.name,
   }
 })
 
