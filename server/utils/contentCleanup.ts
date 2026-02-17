@@ -1,107 +1,50 @@
-import { generateText } from 'ai'
 import { z } from 'zod'
-import { useActiveModel } from './llm'
+import { generateStructuredOutput } from './structuredOutput'
 import { getContentCleanupEnabled } from './settings'
 
-const CLEANUP_PROMPT = `You are a document cleanup assistant. Your task is to:
+// Prompt for cleaning text chunks (no title/summary)
+const CHUNK_CLEANUP_PROMPT = `You are a document cleanup assistant. Clean up the provided text chunk by removing artifacts.
 
-1. Clean up extracted text from documents (PDFs, Word docs, PowerPoints) by removing artifacts
-2. Suggest a better document title if the current one is unclear
-3. Write a concise summary of the document's content
-
-## Text Cleanup Rules
-
-Remove or fix:
+## Remove or fix:
 - Page numbers (e.g., "Page 1 of 10", "- 1 -", standalone numbers at paragraph breaks)
-- Headers and footers that repeat on every page (e.g., document titles, author names, dates that appear repeatedly)
+- Headers and footers that repeat on every page
 - Copyright notices and legal boilerplate
-- Table of contents entries (unless the document IS a table of contents)
+- Table of contents entries
 - Running headers/footers
 - Watermarks or draft notices
 - Excessive whitespace or blank lines
 - Broken words from line wraps (rejoin hy-phenated words)
 - OCR artifacts and garbled text
 
-Preserve:
+## Preserve:
 - All actual content, paragraphs, and sections
 - Meaningful headings and subheadings
 - Lists, bullet points, and numbered items
 - Code blocks or technical content
-- Quotes and citations (the content, not repeated citation markers)
+- Quotes and citations`
 
-## Title Suggestion Rules
+// Prompt for generating title and summary from cleaned text
+const METADATA_PROMPT = `Based on the document text provided, generate a title and summary.
 
-Suggest a better title if the current title:
-- Is a filename (e.g., "document_final_v2", "scan001", "IMG_1234")
-- Is too generic (e.g., "Document", "Untitled", "New File")
-- Doesn't reflect the document's actual content
-- Contains file extensions or underscores
+## Title Rules:
+- If the current title is a filename (e.g., "document_final_v2", "scan001") or too generic, suggest a better one
+- Title should be concise (2-8 words), descriptive, and in title case
+- If the current title is already good, return it unchanged
 
-If the current title is already good and descriptive, return it unchanged.
-The suggested title should be concise (2-8 words), descriptive, and in title case.
+## Summary Rules:
+- Write 2-4 sentences (50-150 words)
+- Capture the main topic, purpose, and key points
+- Help someone decide if they need to read the full document
+- Do NOT start with "This document..."`
 
-## Summary Rules
-
-Write a summary that:
-- Is 2-4 sentences long (50-150 words)
-- Captures the main topic, purpose, and key points of the document
-- Helps someone decide if they need to read the full document
-- Uses plain language, avoiding jargon unless domain-specific terms are essential
-- Does NOT start with "This document..." — just state what it covers directly
-
-## Output Format
-
-You MUST respond with a valid JSON object containing exactly these three fields:
-- "cleanedText": The cleaned document text with artifacts removed
-- "suggestedTitle": A better title for the document, or the original if already good  
-- "summary": A 2-4 sentence summary of the document content
-
-Do not include any text before or after the JSON object. Do not use markdown code blocks.`
-
-const cleanupSchema = z.object({
-  cleanedText: z.string(),
-  suggestedTitle: z.string(),
-  summary: z.string(),
+const chunkCleanupSchema = z.object({
+  cleanedText: z.string().describe('The cleaned text chunk with artifacts removed'),
 })
 
-type CleanupObject = z.infer<typeof cleanupSchema>
-
-/**
- * Attempts to extract and parse JSON from the LLM response.
- * Handles various formats: raw JSON, markdown code blocks, or JSON embedded in text.
- */
-function extractJsonFromResponse(response: string): CleanupObject | null {
-  const text = response.trim()
-
-  // Try 1: Direct JSON parse
-  try {
-    const parsed = JSON.parse(text)
-    return cleanupSchema.parse(parsed)
-  }
-  catch { /* continue */ }
-
-  // Try 2: Extract from markdown code block
-  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
-  if (codeBlockMatch) {
-    try {
-      const parsed = JSON.parse(codeBlockMatch[1]!.trim())
-      return cleanupSchema.parse(parsed)
-    }
-    catch { /* continue */ }
-  }
-
-  // Try 3: Find JSON object anywhere in the text (greedy match for outermost braces)
-  const jsonMatch = text.match(/\{[\s\S]*\}/)
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0])
-      return cleanupSchema.parse(parsed)
-    }
-    catch { /* continue */ }
-  }
-
-  return null
-}
+const metadataSchema = z.object({
+  suggestedTitle: z.string().describe('A better title for the document, or the original if already good'),
+  summary: z.string().describe('A 2-4 sentence summary of the document content'),
+})
 
 export interface CleanupResult {
   text: string
@@ -109,16 +52,65 @@ export interface CleanupResult {
   summary: string | null // null if cleanup disabled or failed
 }
 
-// Maximum characters to send for cleanup (roughly ~30k tokens with buffer for response)
-const MAX_CLEANUP_CHARS = 80000
+// Target chunk size in characters (~4k tokens input, leaving room for output)
+// Rough estimate: 1 token ≈ 4 chars
+const CHUNK_SIZE_CHARS = 12000
+
+// Overlap between chunks to avoid cutting sentences/paragraphs awkwardly
+const CHUNK_OVERLAP_CHARS = 500
+
+/**
+ * Splits text into chunks at paragraph boundaries.
+ */
+function chunkText(text: string): string[] {
+  if (text.length <= CHUNK_SIZE_CHARS) {
+    return [text]
+  }
+
+  const chunks: string[] = []
+  let start = 0
+
+  while (start < text.length) {
+    let end = start + CHUNK_SIZE_CHARS
+
+    // If we're not at the end, try to break at a paragraph
+    if (end < text.length) {
+      // Look for paragraph break (double newline) near the end of the chunk
+      const searchStart = Math.max(start + CHUNK_SIZE_CHARS - 1000, start)
+      const searchRegion = text.slice(searchStart, end)
+      const lastParagraph = searchRegion.lastIndexOf('\n\n')
+
+      if (lastParagraph !== -1) {
+        end = searchStart + lastParagraph + 2 // Include the newlines
+      }
+      else {
+        // Fall back to single newline
+        const lastNewline = searchRegion.lastIndexOf('\n')
+        if (lastNewline !== -1) {
+          end = searchStart + lastNewline + 1
+        }
+      }
+    }
+
+    chunks.push(text.slice(start, end))
+
+    // Move start, accounting for overlap
+    start = end - CHUNK_OVERLAP_CHARS
+    if (start < 0) start = 0
+    // Make sure we make progress
+    const minProgress = chunks.length > 1 ? end - CHUNK_SIZE_CHARS : 0
+    if (start <= minProgress) {
+      start = end
+    }
+  }
+
+  return chunks
+}
 
 /**
  * Cleans up extracted document text using the active LLM provider.
- * Removes page numbers, headers/footers, copyright notices, and other artifacts.
- * Also suggests a better title and generates a summary.
- *
- * For very large documents, only the first portion is cleaned but summary/title
- * are still generated from a representative sample.
+ * For large documents, splits into chunks, cleans each, then combines.
+ * Also generates a title suggestion and summary.
  *
  * @param text - The raw extracted text to clean up
  * @param currentTitle - The current document title (often derived from filename)
@@ -136,52 +128,48 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
   }
 
   try {
-    const { model } = useActiveModel()
+    // Split text into chunks
+    const chunks = chunkText(text)
+    console.log(`[contentCleanup] Processing ${chunks.length} chunk(s)`)
 
-    // For very large documents, we can't clean the whole thing
-    // Truncate for the LLM call, but return original text if too large
-    const isLargeDocument = text.length > MAX_CLEANUP_CHARS
-    const textForLLM = isLargeDocument ? text.slice(0, MAX_CLEANUP_CHARS) : text
+    // Clean each chunk
+    const cleanedChunks: string[] = []
+    for (let i = 0; i < chunks.length; i++) {
+      console.log(`[contentCleanup] Cleaning chunk ${i + 1}/${chunks.length}`)
+      const result = await generateStructuredOutput({
+        schema: chunkCleanupSchema,
+        system: CHUNK_CLEANUP_PROMPT,
+        prompt: `Text chunk ${i + 1} of ${chunks.length}:\n\n${chunks[i]}`,
+      })
+      cleanedChunks.push(result.cleanedText)
+    }
 
-    const prompt = currentTitle
-      ? `Current title: "${currentTitle}"\n\nDocument text:\n${textForLLM}`
-      : `Document text:\n${textForLLM}`
+    // Combine cleaned chunks (remove overlap by deduping at boundaries)
+    const cleanedText = combineChunks(cleanedChunks)
 
-    const { text: responseText } = await generateText({
-      model,
-      system: CLEANUP_PROMPT,
-      prompt,
-      maxOutputTokens: isLargeDocument ? 2000 : Math.min(textForLLM.length * 2, 16000),
+    // Generate title and summary from the cleaned text
+    // Use first ~8k chars for context (should be enough to understand the doc)
+    const contextForMetadata = cleanedText.slice(0, 8000)
+    const metadataPrompt = currentTitle
+      ? `Current title: "${currentTitle}"\n\nDocument text:\n${contextForMetadata}`
+      : `Document text:\n${contextForMetadata}`
+
+    console.log(`[contentCleanup] Generating title and summary`)
+    const metadata = await generateStructuredOutput({
+      schema: metadataSchema,
+      system: METADATA_PROMPT,
+      prompt: metadataPrompt,
     })
 
-    // Parse JSON from the response
-    const object = extractJsonFromResponse(responseText)
-    if (!object) {
-      console.warn('[contentCleanup] Could not extract valid JSON from response')
-      return { text, title: null, summary: null }
-    }
-
-    // For large documents, we only get summary/title, not cleaned text
-    if (isLargeDocument) {
-      const suggestedTitle = currentTitle && object.suggestedTitle !== currentTitle
-        ? object.suggestedTitle
-        : null
-      return {
-        text, // Return original text unchanged
-        title: suggestedTitle,
-        summary: object.summary,
-      }
-    }
-
     // Only return suggested title if it's different from the current one
-    const suggestedTitle = currentTitle && object.suggestedTitle !== currentTitle
-      ? object.suggestedTitle
+    const suggestedTitle = currentTitle && metadata.suggestedTitle !== currentTitle
+      ? metadata.suggestedTitle
       : null
 
     return {
-      text: object.cleanedText,
+      text: cleanedText,
       title: suggestedTitle,
-      summary: object.summary,
+      summary: metadata.summary,
     }
   }
   catch (error) {
@@ -189,4 +177,48 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     console.warn('[contentCleanup] Failed to clean content:', error)
     return { text, title: null, summary: null }
   }
+}
+
+/**
+ * Combines cleaned chunks, attempting to remove duplicate content from overlaps.
+ */
+function combineChunks(chunks: string[]): string {
+  if (chunks.length === 0) {
+    return ''
+  }
+
+  if (chunks.length === 1) {
+    return chunks[0]!
+  }
+
+  let combined = chunks[0]!
+
+  for (let i = 1; i < chunks.length; i++) {
+    const current = chunks[i]!
+
+    // Try to find where the overlap ends by looking for common text
+    // Check the last ~200 chars of combined against start of current
+    const overlapSearchLen = Math.min(300, combined.length, current.length)
+    const endOfPrevious = combined.slice(-overlapSearchLen)
+
+    // Find the best match point
+    let bestMatchLen = 0
+    for (let matchLen = 20; matchLen <= overlapSearchLen; matchLen++) {
+      const searchStr = endOfPrevious.slice(-matchLen)
+      if (current.startsWith(searchStr)) {
+        bestMatchLen = matchLen
+      }
+    }
+
+    if (bestMatchLen > 0) {
+      // Skip the overlapping part
+      combined += current.slice(bestMatchLen)
+    }
+    else {
+      // No overlap found, just append with a newline
+      combined += '\n' + current
+    }
+  }
+
+  return combined
 }
