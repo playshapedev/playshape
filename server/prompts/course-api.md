@@ -4,10 +4,7 @@ Every activity has access to `window.CourseAPI` — a global API for reporting l
 
 ### Lifecycle
 
-```js
-CourseAPI.initialize()   // Call once when the activity mounts
-CourseAPI.terminate()    // Call once when the activity is done
-```
+Activities do NOT need to call `initialize()` or `terminate()` — the course interface handles the session lifecycle. Just call `complete()` or `fail()` when the activity is done.
 
 ### Completion (REQUIRED)
 
@@ -81,8 +78,6 @@ CourseAPI.record({
 ```js
 // In <script setup>
 onMounted(() => {
-  CourseAPI.initialize()
-
   // Restore previous state if resuming
   const saved = CourseAPI.restore()
   if (saved) {
@@ -112,7 +107,6 @@ function finishQuiz() {
   } else {
     CourseAPI.fail({ score })
   }
-  CourseAPI.terminate()
 }
 ```
 
@@ -120,12 +114,7 @@ function finishQuiz() {
 
 ```js
 onMounted(() => {
-  CourseAPI.initialize()
   CourseAPI.complete() // No interaction required — immediately complete
-})
-
-onUnmounted(() => {
-  CourseAPI.terminate()
 })
 ```
 

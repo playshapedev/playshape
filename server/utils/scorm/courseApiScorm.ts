@@ -389,6 +389,14 @@ ${getLzStringSource()}
     }
   }
 
+  // ── Auto-initialize helper ──────────────────────────────────────────────────
+  function ensureInitialized() {
+    if (!initialized) {
+      window.CourseAPI.initialize();
+    }
+    return !terminated;
+  }
+
   // ── CourseAPI Implementation ────────────────────────────────────────────────
   window.CourseAPI = {
     // Debug access
@@ -505,8 +513,9 @@ ${getLzStringSource()}
     },
 
     complete: function(options) {
-      if (!initialized || terminated) {
-        logError('complete() called in invalid state');
+      ensureInitialized();
+      if (terminated) {
+        logError('complete() called after terminate()');
         return;
       }
 
@@ -531,8 +540,9 @@ ${getLzStringSource()}
     },
 
     fail: function(options) {
-      if (!initialized || terminated) {
-        logError('fail() called in invalid state');
+      ensureInitialized();
+      if (terminated) {
+        logError('fail() called after terminate()');
         return;
       }
 
@@ -557,7 +567,8 @@ ${getLzStringSource()}
     },
 
     setProgress: function(value) {
-      if (!initialized || terminated) return;
+      ensureInitialized();
+      if (terminated) return;
 
       var progress = Math.max(0, Math.min(1, value));
       log('setProgress: ' + progress);
@@ -571,7 +582,8 @@ ${getLzStringSource()}
     },
 
     setLocation: function(location) {
-      if (!initialized || terminated) return;
+      ensureInitialized();
+      if (terminated) return;
 
       var state = getCurrentActivityState();
       if (state) {
@@ -595,14 +607,14 @@ ${getLzStringSource()}
     },
 
     getLocation: function() {
-      if (!initialized) return null;
-
+      ensureInitialized();
       var state = getCurrentActivityState();
       return state ? state.location : null;
     },
 
     suspend: function(data) {
-      if (!initialized || terminated) return;
+      ensureInitialized();
+      if (terminated) return;
 
       var state = getCurrentActivityState();
       if (state) {
@@ -613,14 +625,14 @@ ${getLzStringSource()}
     },
 
     restore: function() {
-      if (!initialized) return null;
-
+      ensureInitialized();
       var state = getCurrentActivityState();
       return state ? state.suspendData : null;
     },
 
     record: function(statement) {
-      if (!initialized || terminated) return;
+      ensureInitialized();
+      if (terminated) return;
 
       // Add timestamp if not present
       if (!statement.timestamp) {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
+
 definePageMeta({ noPadding: true })
 
 const route = useRoute()
@@ -312,6 +314,54 @@ watch(formData, () => {
   saveTimeout = setTimeout(persistSampleData, 1000)
 }, { deep: true })
 
+// ─── Source Editor ───────────────────────────────────────────────────────────
+
+const sourceCode = ref('')
+const sourceSaveStatus = ref<'idle' | 'saving' | 'saved'>('idle')
+let skipNextSourceSave = false
+let sourceTimeout: ReturnType<typeof setTimeout> | undefined
+let sourceSavedTimeout: ReturnType<typeof setTimeout> | undefined
+
+// Sync source code from template (initial load and after AI updates)
+watch(() => template.value?.component, (component) => {
+  if (component !== undefined) {
+    skipNextSourceSave = true
+    sourceCode.value = component || ''
+  }
+}, { immediate: true })
+
+async function persistSourceCode() {
+  if (!template.value) return
+  sourceSaveStatus.value = 'saving'
+  try {
+    await updateTemplate(template.value.id, { component: sourceCode.value })
+    sourceSaveStatus.value = 'saved'
+    clearTimeout(sourceSavedTimeout)
+    sourceSavedTimeout = setTimeout(() => {
+      sourceSaveStatus.value = 'idle'
+    }, 2000)
+    // Refresh to update the preview
+    await refresh()
+  }
+  catch {
+    sourceSaveStatus.value = 'idle'
+  }
+}
+
+// Debounced save for source code
+watch(sourceCode, () => {
+  if (skipNextSourceSave) {
+    skipNextSourceSave = false
+    return
+  }
+  clearTimeout(sourceTimeout)
+  sourceTimeout = setTimeout(persistSourceCode, 1500) // slightly longer debounce for code
+})
+
+// Monaco editor theme based on color mode
+const colorMode = useColorMode()
+const monacoTheme = computed(() => colorMode.value === 'dark' ? 'vs-dark' : 'vs')
+
 // ─── Preview Error Feedback ──────────────────────────────────────────────────
 
 function onPreviewError(error: string | null) {
@@ -561,9 +611,57 @@ async function generateAndSaveThumbnail() {
   </USlideover>
 
   <!-- Template source slideover -->
-  <USlideover v-model:open="showTemplateSource" title="Template Source" description="The Vue component generated for this template." side="right">
+  <USlideover v-model:open="showTemplateSource" title="Template Source" side="right" :ui="{ content: 'max-w-2xl' }">
+    <template #description>
+      <div class="flex items-center gap-2">
+        <span>Edit the Vue component source code.</span>
+        <Transition
+          enter-active-class="transition-opacity duration-200"
+          leave-active-class="transition-opacity duration-300"
+          enter-from-class="opacity-0"
+          leave-to-class="opacity-0"
+        >
+          <span v-if="sourceSaveStatus === 'saving'" class="flex items-center gap-1 text-xs text-muted">
+            <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" />
+            Saving...
+          </span>
+          <span v-else-if="sourceSaveStatus === 'saved'" class="flex items-center gap-1 text-xs text-success">
+            <UIcon name="i-lucide-check" class="size-3" />
+            Saved
+          </span>
+        </Transition>
+      </div>
+    </template>
     <template #body>
-      <pre class="text-xs font-mono whitespace-pre-wrap break-words bg-elevated rounded-lg p-4 overflow-auto">{{ template?.component || 'No component generated yet.' }}</pre>
+      <ClientOnly>
+        <VueMonacoEditor
+          v-if="template?.component"
+          v-model:value="sourceCode"
+          language="html"
+          :theme="monacoTheme"
+          :options="{
+            automaticLayout: true,
+            minimap: { enabled: false },
+            wordWrap: 'on',
+            fontSize: 13,
+            lineNumbers: 'on',
+            scrollBeyondLastLine: false,
+            tabSize: 2,
+            renderWhitespace: 'selection',
+          }"
+          class="h-[calc(100vh-8rem)] rounded-lg overflow-hidden"
+        />
+        <div v-else class="flex flex-col items-center justify-center h-64 text-muted">
+          <UIcon name="i-lucide-file-code" class="size-8 mb-2" />
+          <p class="text-sm">No component generated yet.</p>
+          <p class="text-xs text-dimmed mt-1">Start a conversation to generate a template.</p>
+        </div>
+        <template #fallback>
+          <div class="flex items-center justify-center h-64">
+            <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
+          </div>
+        </template>
+      </ClientOnly>
     </template>
   </USlideover>
 </template>

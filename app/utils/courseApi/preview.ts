@@ -91,11 +91,15 @@ export const COURSE_API_PREVIEW_SCRIPT = `
     log('flush', state, LOG_STYLE_DIM);
   }
 
-  function guardInitialized(method) {
+  function ensureInitialized() {
     if (!initialized) {
-      log(method + ' called before initialize()', undefined, LOG_STYLE_ERROR);
-      return false;
+      // Auto-initialize if not already done
+      window.CourseAPI.initialize();
     }
+    return !terminated;
+  }
+
+  function guardNotTerminated(method) {
     if (terminated) {
       log(method + ' called after terminate()', undefined, LOG_STYLE_ERROR);
       return false;
@@ -149,7 +153,10 @@ export const COURSE_API_PREVIEW_SCRIPT = `
     },
 
     terminate: function() {
-      if (!guardInitialized('terminate')) return;
+      if (!initialized || terminated) {
+        log('terminate() — not initialized or already terminated', undefined, LOG_STYLE_DIM);
+        return;
+      }
       terminated = true;
 
       var sessionTime = startTime ? Math.round((Date.now() - startTime) / 1000) : 0;
@@ -167,7 +174,8 @@ export const COURSE_API_PREVIEW_SCRIPT = `
     },
 
     complete: function(options) {
-      if (!guardInitialized('complete')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('complete')) return;
       completionStatus = 'completed';
       if (options && options.score !== undefined) {
         score = options.score;
@@ -186,7 +194,8 @@ export const COURSE_API_PREVIEW_SCRIPT = `
     },
 
     fail: function(options) {
-      if (!guardInitialized('fail')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('fail')) return;
       completionStatus = 'failed';
       if (options && options.score !== undefined) {
         score = options.score;
@@ -205,46 +214,44 @@ export const COURSE_API_PREVIEW_SCRIPT = `
     },
 
     setProgress: function(value) {
-      if (!guardInitialized('setProgress')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('setProgress')) return;
       progress = Math.max(0, Math.min(1, value));
       log('setProgress(' + progress + ')');
       markDirty();
     },
 
     setLocation: function(loc) {
-      if (!guardInitialized('setLocation')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('setLocation')) return;
       location = loc;
       log('setLocation(' + JSON.stringify(loc) + ')');
       markDirty();
     },
 
     getLocation: function() {
-      if (!initialized) {
-        log('getLocation() called before initialize()', undefined, LOG_STYLE_ERROR);
-        return null;
-      }
+      ensureInitialized();
       log('getLocation() → ' + JSON.stringify(location), undefined, LOG_STYLE_DIM);
       return location;
     },
 
     suspend: function(data) {
-      if (!guardInitialized('suspend')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('suspend')) return;
       suspendData = data;
       log('suspend()', data);
       markDirty();
     },
 
     restore: function() {
-      if (!initialized) {
-        log('restore() called before initialize()', undefined, LOG_STYLE_ERROR);
-        return null;
-      }
+      ensureInitialized();
       log('restore() → ' + (suspendData !== null ? 'found' : 'null'), suspendData, LOG_STYLE_DIM);
       return suspendData;
     },
 
     record: function(statement) {
-      if (!guardInitialized('record')) return;
+      ensureInitialized();
+      if (!guardNotTerminated('record')) return;
       if (!statement.timestamp) {
         statement.timestamp = Date.now();
       }
