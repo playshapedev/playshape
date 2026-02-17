@@ -64,6 +64,45 @@ const cleanupSchema = z.object({
   summary: z.string(),
 })
 
+type CleanupObject = z.infer<typeof cleanupSchema>
+
+/**
+ * Attempts to extract and parse JSON from the LLM response.
+ * Handles various formats: raw JSON, markdown code blocks, or JSON embedded in text.
+ */
+function extractJsonFromResponse(response: string): CleanupObject | null {
+  const text = response.trim()
+
+  // Try 1: Direct JSON parse
+  try {
+    const parsed = JSON.parse(text)
+    return cleanupSchema.parse(parsed)
+  }
+  catch { /* continue */ }
+
+  // Try 2: Extract from markdown code block
+  const codeBlockMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (codeBlockMatch) {
+    try {
+      const parsed = JSON.parse(codeBlockMatch[1]!.trim())
+      return cleanupSchema.parse(parsed)
+    }
+    catch { /* continue */ }
+  }
+
+  // Try 3: Find JSON object anywhere in the text (greedy match for outermost braces)
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0])
+      return cleanupSchema.parse(parsed)
+    }
+    catch { /* continue */ }
+  }
+
+  return null
+}
+
 export interface CleanupResult {
   text: string
   title: string | null // null means keep original
@@ -116,16 +155,11 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     })
 
     // Parse JSON from the response
-    // Try to extract JSON if wrapped in markdown code blocks
-    let jsonStr = responseText.trim()
-    const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1]!.trim()
+    const object = extractJsonFromResponse(responseText)
+    if (!object) {
+      console.warn('[contentCleanup] Could not extract valid JSON from response')
+      return { text, title: null, summary: null }
     }
-
-    // Parse and validate
-    const parsed = JSON.parse(jsonStr)
-    const object = cleanupSchema.parse(parsed)
 
     // For large documents, we only get summary/title, not cleaned text
     if (isLargeDocument) {
@@ -137,12 +171,6 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
         title: suggestedTitle,
         summary: object.summary,
       }
-    }
-
-    // Sanity check: if the cleaned text is drastically shorter, something went wrong
-    if (object.cleanedText.length < text.length * 0.3) {
-      console.warn('[contentCleanup] Cleaned text is suspiciously short, using original')
-      return { text, title: null, summary: null }
     }
 
     // Only return suggested title if it's different from the current one
