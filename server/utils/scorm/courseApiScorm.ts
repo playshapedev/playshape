@@ -256,13 +256,19 @@ ${getLzStringSource()}
   function calculateCourseCompletion() {
     var totalActivities = window.__PLAYSHAPE_COURSE__ ? countActivities() : 1;
     var completedCount = 0;
+    var passedCount = 0;
+    var failedCount = 0;
     var totalScore = 0;
     var scoredCount = 0;
 
     for (var id in activityStates) {
       var state = activityStates[id];
-      if (state.status === 'completed' || state.status === 'passed' || state.status === 'failed') {
+      if (state.status === 'completed' || state.status === 'passed') {
         completedCount++;
+        passedCount++;
+      } else if (state.status === 'failed') {
+        completedCount++;
+        failedCount++;
       }
       if (state.score !== null) {
         totalScore += state.score;
@@ -273,6 +279,8 @@ ${getLzStringSource()}
     return {
       completed: completedCount >= totalActivities,
       completedCount: completedCount,
+      passedCount: passedCount,
+      failedCount: failedCount,
       totalActivities: totalActivities,
       averageScore: scoredCount > 0 ? totalScore / scoredCount : null
     };
@@ -316,16 +324,22 @@ ${getLzStringSource()}
 
     // Set completion status
     if (completion.completed) {
+      // Determine success: passed if score >= 70% OR if all activities passed (no failures and no scores)
+      var passed = false;
+      if (completion.averageScore !== null) {
+        passed = completion.averageScore >= 0.7;
+      } else {
+        // No scores - success if no activities explicitly failed
+        passed = completion.failedCount === 0;
+      }
+
       if (IS_SCORM_12) {
         // SCORM 1.2: lesson_status is combined completion + success
-        var status = completion.averageScore !== null && completion.averageScore >= 0.7 ? 'passed' : 'completed';
-        setValue('cmi.core.lesson_status', status);
+        setValue('cmi.core.lesson_status', passed ? 'passed' : 'failed');
       } else {
         // SCORM 2004: separate completion and success status
         setValue('cmi.completion_status', 'completed');
-        if (completion.averageScore !== null) {
-          setValue('cmi.success_status', completion.averageScore >= 0.7 ? 'passed' : 'failed');
-        }
+        setValue('cmi.success_status', passed ? 'passed' : 'failed');
       }
     }
 
