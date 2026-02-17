@@ -27,7 +27,7 @@ const providerTypeOptions = Object.entries(IMAGE_PROVIDER_TYPES).map(([value, me
 // ─── Form State ──────────────────────────────────────────────────────────────
 
 const schema = z.object({
-  type: z.enum(['openai', 'replicate', 'fal']),
+  type: z.enum(['openai', 'replicate', 'fal', 'fireworks']),
   apiKey: z.string().min(1, 'API key is required'),
   model: z.string().min(1, 'Model is required'),
 })

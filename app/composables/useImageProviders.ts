@@ -1,7 +1,7 @@
 import type { imageProviders } from '~~/server/database/schema'
 
 export type ImageProvider = typeof imageProviders.$inferSelect
-export type ImageProviderType = 'openai' | 'replicate' | 'fal'
+export type ImageProviderType = 'openai' | 'replicate' | 'fal' | 'fireworks'
 
 export interface ImageModelInfo {
   id: string
@@ -85,6 +85,14 @@ export const IMAGE_PROVIDER_TYPES: Record<ImageProviderType, {
       { id: 'fal-ai/flux-pro/v1.1', name: 'FLUX Pro 1.1', description: 'High quality FLUX model' },
       { id: 'fal-ai/flux/schnell', name: 'FLUX Schnell', description: 'Fast FLUX model' },
       { id: 'fal-ai/flux/dev', name: 'FLUX Dev', description: 'Development FLUX model' },
+    ],
+  },
+  fireworks: {
+    label: 'Fireworks AI',
+    icon: 'i-lucide-flame',
+    defaultModels: [
+      { id: 'accounts/fireworks/models/flux-kontext-pro', name: 'FLUX Kontext Pro', description: 'High quality image editing and generation' },
+      { id: 'accounts/fireworks/models/flux-kontext-max', name: 'FLUX Kontext Max', description: 'Maximum quality image editing and generation' },
     ],
   },
 }

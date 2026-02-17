@@ -155,7 +155,7 @@ export const llmProviders = sqliteTable('llm_providers', {
 // and mark one as active for image generation tasks.
 
 /** Canonical list of supported image provider types. Add new providers here. */
-export const IMAGE_PROVIDER_TYPES = ['openai', 'replicate', 'fal'] as const
+export const IMAGE_PROVIDER_TYPES = ['openai', 'replicate', 'fal', 'fireworks'] as const
 export type ImageProviderType = (typeof IMAGE_PROVIDER_TYPES)[number]
 
 export const imageProviders = sqliteTable('image_providers', {
