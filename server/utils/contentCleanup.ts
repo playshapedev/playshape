@@ -7,6 +7,7 @@ const CLEANUP_PROMPT = `You are a document cleanup assistant. Your task is to:
 
 1. Clean up extracted text from documents (PDFs, Word docs, PowerPoints) by removing artifacts
 2. Suggest a better document title if the current one is unclear
+3. Write a concise summary of the document's content
 
 ## Text Cleanup Rules
 
@@ -37,36 +38,47 @@ Suggest a better title if the current title:
 - Contains file extensions or underscores
 
 If the current title is already good and descriptive, return it unchanged.
-The suggested title should be concise (2-8 words), descriptive, and in title case.`
+The suggested title should be concise (2-8 words), descriptive, and in title case.
+
+## Summary Rules
+
+Write a summary that:
+- Is 2-4 sentences long (50-150 words)
+- Captures the main topic, purpose, and key points of the document
+- Helps someone decide if they need to read the full document
+- Uses plain language, avoiding jargon unless domain-specific terms are essential
+- Does NOT start with "This document..." — just state what it covers directly`
 
 const cleanupSchema = z.object({
   cleanedText: z.string().describe('The cleaned document text with artifacts removed'),
   suggestedTitle: z.string().describe('A better title for the document, or the original if already good'),
+  summary: z.string().describe('A 2-4 sentence summary of the document content'),
 })
 
 export interface CleanupResult {
   text: string
   title: string | null // null means keep original
+  summary: string | null // null if cleanup disabled or failed
 }
 
 /**
  * Cleans up extracted document text using the active LLM provider.
  * Removes page numbers, headers/footers, copyright notices, and other artifacts.
- * Also suggests a better title if the current one is not descriptive.
+ * Also suggests a better title and generates a summary.
  *
  * @param text - The raw extracted text to clean up
  * @param currentTitle - The current document title (often derived from filename)
- * @returns The cleaned text and optionally a suggested title
+ * @returns The cleaned text, optionally a suggested title, and a summary
  */
 export async function cleanupContent(text: string, currentTitle?: string): Promise<CleanupResult> {
   // Check if cleanup is enabled
   if (!getContentCleanupEnabled()) {
-    return { text, title: null }
+    return { text, title: null, summary: null }
   }
 
   // Skip very short texts (not worth cleaning)
   if (text.length < 500) {
-    return { text, title: null }
+    return { text, title: null, summary: null }
   }
 
   try {
@@ -87,7 +99,7 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     // Sanity check: if the cleaned text is drastically shorter, something went wrong
     if (object.cleanedText.length < text.length * 0.3) {
       console.warn('[contentCleanup] Cleaned text is suspiciously short, using original')
-      return { text, title: null }
+      return { text, title: null, summary: null }
     }
 
     // Only return suggested title if it's different from the current one
@@ -98,11 +110,12 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     return {
       text: object.cleanedText,
       title: suggestedTitle,
+      summary: object.summary,
     }
   }
   catch (error) {
     // Log but don't fail - return original text if cleanup fails
     console.warn('[contentCleanup] Failed to clean content:', error)
-    return { text, title: null }
+    return { text, title: null, summary: null }
   }
 }

@@ -471,7 +471,10 @@ function formatFileSize(bytes: number | null): string {
             <p class="font-medium text-highlighted truncate">
               {{ doc.title }}
             </p>
-            <div class="flex items-center gap-2 text-xs text-dimmed">
+            <p v-if="doc.summary" class="text-sm text-muted line-clamp-2 mt-0.5">
+              {{ doc.summary }}
+            </p>
+            <div class="flex items-center gap-2 text-xs text-dimmed mt-1">
               <span>{{ sourceTypeLabel(doc.sourceType) }}</span>
               <span v-if="doc.fileSize">{{ formatFileSize(doc.fileSize) }}</span>
               <UBadge
@@ -613,8 +616,22 @@ function formatFileSize(bytes: number | null): string {
           <UIcon :name="sourceTypeIcon(previewDoc.sourceType)" class="size-4" />
           <span>{{ sourceTypeLabel(previewDoc.sourceType) }}</span>
         </div>
-        <div class="prose prose-sm max-w-none whitespace-pre-wrap text-sm">
-          {{ previewDoc.body }}
+
+        <!-- Summary -->
+        <div v-if="previewDoc.summary" class="p-3 rounded-lg bg-elevated border border-default">
+          <div class="flex items-center gap-1.5 text-xs font-medium text-muted mb-1.5">
+            <UIcon name="i-lucide-sparkles" class="size-3" />
+            Summary
+          </div>
+          <p class="text-sm">{{ previewDoc.summary }}</p>
+        </div>
+
+        <!-- Full content -->
+        <div>
+          <div class="text-xs font-medium text-muted mb-2">Full Content</div>
+          <div class="prose prose-sm max-w-none whitespace-pre-wrap text-sm">
+            {{ previewDoc.body }}
+          </div>
         </div>
       </div>
     </template>

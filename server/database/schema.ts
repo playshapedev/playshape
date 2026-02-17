@@ -95,6 +95,7 @@ export const documents = sqliteTable('documents', {
   mimeType: text('mime_type'), // MIME type of the original file
   fileSize: integer('file_size'), // size in bytes
   body: text('body').notNull().default(''), // extracted plain text content
+  summary: text('summary'), // AI-generated summary of the document content
   status: text('status').notNull().default('processing'), // 'processing', 'ready', 'error'
   error: text('error'), // error message if extraction failed
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),

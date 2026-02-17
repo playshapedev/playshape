@@ -102,6 +102,7 @@ async function processTextDocument(
     title: finalTitle,
     sourceType: 'text',
     body: finalContent,
+    summary: cleanup.summary,
     status: 'ready',
     createdAt: now,
     updatedAt: now,
@@ -178,9 +179,15 @@ async function processFileUpload(
   const finalTitle = cleanup.title || title
   const finalContent = cleanup.text
 
-  // Update document with cleaned text and possibly better title
+  // Update document with cleaned text, summary, and possibly better title
   db.update(documents)
-    .set({ title: finalTitle, body: finalContent, status: 'ready', updatedAt: new Date() })
+    .set({
+      title: finalTitle,
+      body: finalContent,
+      summary: cleanup.summary,
+      status: 'ready',
+      updatedAt: new Date(),
+    })
     .where(eq(documents.id, id))
     .run()
 
