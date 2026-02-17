@@ -16,15 +16,17 @@ const emit = defineEmits<{
 const { providers } = useAIProviders()
 
 // Get all enabled image models across all providers
+// Store both modelId (for generation) and id (for activation)
 const imageModels = computed(() => {
   if (!providers.value) return []
-  const models: Array<{ id: string; name: string; providerLabel: string }> = []
+  const models: Array<{ id: string; modelId: string; name: string; providerLabel: string }> = []
   for (const provider of providers.value) {
     const meta = AI_PROVIDER_META[provider.type as AIProviderType]
     for (const model of provider.models) {
       if (model.purpose === 'image') {
         models.push({
-          id: model.modelId,
+          id: model.id, // Internal DB id for activation
+          modelId: model.modelId, // Model identifier for generation
           name: model.name,
           providerLabel: meta?.label || provider.type,
         })
@@ -34,7 +36,7 @@ const imageModels = computed(() => {
   return models
 })
 
-// Currently selected model ID (defaults to active one)
+// Currently selected model ID (the modelId, not the internal id)
 const selectedModelId = ref<string | undefined>(undefined)
 
 // Auto-select the active image model on load
@@ -45,17 +47,37 @@ watch(activeImageModel, (active) => {
   }
 }, { immediate: true })
 
+// When user selects a different model, activate it globally
+async function selectModel(modelId: string) {
+  if (modelId === selectedModelId.value) return
+
+  selectedModelId.value = modelId
+
+  // Find the model's internal ID and activate it
+  const model = imageModels.value.find(m => m.modelId === modelId)
+  if (model) {
+    try {
+      await activateAIModel(model.id)
+      // Refresh providers to update the active state
+      await refreshNuxtData('/api/settings/ai-providers')
+    }
+    catch (error) {
+      console.error('Failed to activate model:', error)
+    }
+  }
+}
+
 // Model selector items
 const modelSelectorItems = computed(() =>
   imageModels.value.map(m => ({
     label: m.name,
     description: m.providerLabel,
-    value: m.id,
+    value: m.modelId,
   })),
 )
 
 const selectedModelLabel = computed(() => {
-  const model = imageModels.value.find(m => m.id === selectedModelId.value)
+  const model = imageModels.value.find(m => m.modelId === selectedModelId.value)
   return model ? model.name : 'Select model'
 })
 
@@ -341,7 +363,7 @@ onUnmounted(() => {
         <template #item="{ item }">
           <div
             class="flex items-center justify-between w-full"
-            @click="selectedModelId = item.value"
+            @click="selectModel(item.value)"
           >
             <div>
               <div class="font-medium">{{ item.label }}</div>
