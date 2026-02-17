@@ -261,6 +261,8 @@ html.electron .sidebar-overlay {
  * Compact typography for MDC-rendered markdown inside chat message bubbles.
  * Scoped to .chat-prose so it doesn't affect prose elsewhere in the app.
  */
+.chat-prose { line-height: 1.5; }
+
 .chat-prose h1,
 .chat-prose h2,
 .chat-prose h3,
