@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AIProviderWithModels, AIProviderType, ModelInfo, AIModelPurpose } from '~/composables/useAIProviders'
+import type { AIProviderWithModels, AIProviderType, ModelInfo } from '~/composables/useAIProviders'
 
 const props = defineProps<{
   provider: AIProviderWithModels
@@ -27,6 +27,8 @@ async function saveCredentials() {
       baseUrl: baseUrl.value || null,
     })
     toast.add({ title: 'Credentials saved', color: 'success', icon: 'i-lucide-check' })
+    // Refresh models after saving credentials (API key might enable more models)
+    await fetchModels()
   }
   catch (error) {
     toast.add({ title: 'Failed to save', color: 'error', icon: 'i-lucide-x' })
@@ -37,13 +39,45 @@ async function saveCredentials() {
   }
 }
 
+// ─── Model Discovery ─────────────────────────────────────────────────────────
+
+const availableModels = ref<ModelInfo[]>([])
+const loadingModels = ref(false)
+const modelError = ref('')
+
+async function fetchModels() {
+  loadingModels.value = true
+  modelError.value = ''
+  try {
+    availableModels.value = await discoverModels(props.provider.id)
+  }
+  catch (error: unknown) {
+    console.error('Failed to fetch models:', error)
+    if (error && typeof error === 'object' && 'data' in error) {
+      const data = (error as { data?: { message?: string } }).data
+      modelError.value = data?.message || 'Failed to fetch models'
+    }
+    else {
+      modelError.value = 'Failed to fetch models'
+    }
+  }
+  finally {
+    loadingModels.value = false
+  }
+}
+
+// Fetch models on mount
+onMounted(() => {
+  fetchModels()
+})
+
 // ─── Model Management ────────────────────────────────────────────────────────
 
 const enabledModelIds = computed(() => new Set(props.provider.models.map(m => m.modelId)))
 
 // Available models grouped by purpose
-const textModels = computed(() => meta.value?.availableModels.filter(m => m.purpose === 'text') ?? [])
-const imageModels = computed(() => meta.value?.availableModels.filter(m => m.purpose === 'image') ?? [])
+const textModels = computed(() => availableModels.value.filter(m => m.purpose === 'text'))
+const imageModels = computed(() => availableModels.value.filter(m => m.purpose === 'image'))
 
 async function toggleModel(model: ModelInfo) {
   const isEnabled = enabledModelIds.value.has(model.id)
@@ -135,59 +169,85 @@ async function toggleModel(model: ModelInfo) {
 
     <!-- Models -->
     <div class="space-y-4">
-      <h3 class="font-medium">Models</h3>
+      <div class="flex items-center justify-between">
+        <h3 class="font-medium">Models</h3>
+        <UButton
+          icon="i-lucide-refresh-cw"
+          variant="ghost"
+          color="neutral"
+          size="xs"
+          :loading="loadingModels"
+          @click="fetchModels"
+        >
+          Refresh
+        </UButton>
+      </div>
       <p class="text-sm text-muted">Select the models you want to use. Click on an enabled model in the provider card to set it as active.</p>
 
-      <!-- Text Models -->
-      <div v-if="textModels.length > 0" class="space-y-2">
-        <p class="text-xs font-medium text-muted uppercase tracking-wide">Text Generation</p>
-        <div class="space-y-1">
-          <button
-            v-for="model in textModels"
-            :key="model.id"
-            class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
-            @click="toggleModel(model)"
-          >
-            <div>
-              <p class="font-medium">{{ model.name }}</p>
-              <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
-            </div>
-            <UIcon
-              :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
-              :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"
-              class="size-5 shrink-0"
-            />
-          </button>
-        </div>
+      <!-- Loading -->
+      <div v-if="loadingModels && availableModels.length === 0" class="space-y-2">
+        <USkeleton class="h-12 w-full" />
+        <USkeleton class="h-12 w-full" />
+        <USkeleton class="h-12 w-full" />
       </div>
 
-      <!-- Image Models -->
-      <div v-if="imageModels.length > 0" class="space-y-2">
-        <p class="text-xs font-medium text-muted uppercase tracking-wide">Image Generation</p>
-        <div class="space-y-1">
-          <button
-            v-for="model in imageModels"
-            :key="model.id"
-            class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
-            @click="toggleModel(model)"
-          >
-            <div>
-              <p class="font-medium">{{ model.name }}</p>
-              <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
-            </div>
-            <UIcon
-              :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
-              :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"
-              class="size-5 shrink-0"
-            />
-          </button>
-        </div>
+      <!-- Error -->
+      <div v-else-if="modelError" class="p-4 rounded-lg bg-error/10 text-error text-sm">
+        {{ modelError }}
       </div>
 
-      <!-- No predefined models (local providers) -->
-      <p v-if="textModels.length === 0 && imageModels.length === 0" class="text-sm text-muted italic">
-        Models are discovered automatically from the server.
-      </p>
+      <template v-else>
+        <!-- Text Models -->
+        <div v-if="textModels.length > 0" class="space-y-2">
+          <p class="text-xs font-medium text-muted uppercase tracking-wide">Text Generation</p>
+          <div class="space-y-1">
+            <button
+              v-for="model in textModels"
+              :key="model.id"
+              class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
+              @click="toggleModel(model)"
+            >
+              <div>
+                <p class="font-medium">{{ model.name }}</p>
+                <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
+              </div>
+              <UIcon
+                :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
+                :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"
+                class="size-5 shrink-0"
+              />
+            </button>
+          </div>
+        </div>
+
+        <!-- Image Models -->
+        <div v-if="imageModels.length > 0" class="space-y-2">
+          <p class="text-xs font-medium text-muted uppercase tracking-wide">Image Generation</p>
+          <div class="space-y-1">
+            <button
+              v-for="model in imageModels"
+              :key="model.id"
+              class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
+              @click="toggleModel(model)"
+            >
+              <div>
+                <p class="font-medium">{{ model.name }}</p>
+                <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
+              </div>
+              <UIcon
+                :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
+                :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"
+                class="size-5 shrink-0"
+              />
+            </button>
+          </div>
+        </div>
+
+        <!-- No models found -->
+        <p v-if="!loadingModels && textModels.length === 0 && imageModels.length === 0" class="text-sm text-muted italic">
+          No models found. Make sure the server is running or check your API key.
+        </p>
+      </template>
     </div>
 
     <!-- Done button -->
