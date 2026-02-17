@@ -72,7 +72,6 @@ async function handleDeleteLibrary() {
 
 // ─── Document upload ─────────────────────────────────────────────────────────
 
-const uploading = ref(false)
 const isDragging = ref(false)
 
 const ACCEPTED_TYPES = [
@@ -83,32 +82,67 @@ const ACCEPTED_TYPES = [
 ]
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.pptx,.txt'
 
-async function handleFileUpload(files: FileList | File[]) {
-  uploading.value = true
-  let successCount = 0
-  let failCount = 0
+// Upload progress tracking
+interface UploadTask {
+  id: string
+  filename: string
+  status: 'pending' | 'uploading' | 'processing' | 'success' | 'error'
+  error?: string
+}
 
-  for (const file of Array.from(files)) {
+const uploadTasks = ref<UploadTask[]>([])
+const isUploading = computed(() => uploadTasks.value.some(t => t.status === 'uploading' || t.status === 'processing'))
+const hasCompletedUploads = computed(() => uploadTasks.value.some(t => t.status === 'success' || t.status === 'error'))
+
+function clearCompletedUploads() {
+  uploadTasks.value = uploadTasks.value.filter(t => t.status === 'uploading' || t.status === 'processing' || t.status === 'pending')
+}
+
+async function handleFileUpload(files: FileList | File[]) {
+  const fileArray = Array.from(files)
+
+  // Clear any completed tasks from previous uploads
+  clearCompletedUploads()
+
+  // Add all files to the task list
+  const newTasks: UploadTask[] = fileArray.map(file => ({
+    id: crypto.randomUUID(),
+    filename: file.name,
+    status: 'pending' as const,
+  }))
+  uploadTasks.value.push(...newTasks)
+
+  // Process files sequentially (to avoid overwhelming the server)
+  for (let i = 0; i < fileArray.length; i++) {
+    const file = fileArray[i]!
+    const task = newTasks[i]!
+
+    // Update status to uploading
+    task.status = 'uploading'
+
     try {
+      // Update to processing (extraction + AI cleanup takes time)
+      task.status = 'processing'
       await uploadDocument(libraryId, file)
-      successCount++
+      task.status = 'success'
     }
     catch (e: unknown) {
-      failCount++
-      const message = e instanceof Error ? e.message : 'Unknown error'
-      toast.add({ title: `Failed to upload ${file.name}`, description: message, color: 'error' })
+      task.status = 'error'
+      task.error = e instanceof Error ? e.message : 'Upload failed'
     }
   }
 
-  uploading.value = false
+  // Refresh document list
+  const successCount = newTasks.filter(t => t.status === 'success').length
   if (successCount > 0) {
-    toast.add({
-      title: `${successCount} ${successCount === 1 ? 'document' : 'documents'} uploaded`,
-      color: 'success',
-    })
     await refreshDocs()
     await refreshLibrary()
   }
+
+  // Auto-clear successful uploads after a delay
+  setTimeout(() => {
+    uploadTasks.value = uploadTasks.value.filter(t => t.status !== 'success')
+  }, 3000)
 }
 
 function onFileInput(event: Event) {
@@ -324,18 +358,14 @@ function formatFileSize(bytes: number | null): string {
 
     <!-- Upload zone -->
     <div
-      class="border-2 border-dashed rounded-lg p-8 text-center transition-colors"
+      class="border-2 border-dashed rounded-lg p-6 text-center transition-colors"
       :class="isDragging ? 'border-primary bg-primary/5' : 'border-muted'"
       @dragover.prevent="isDragging = true"
       @dragleave.prevent="isDragging = false"
       @drop.prevent="onDrop"
     >
-      <div v-if="uploading" class="flex flex-col items-center gap-2">
-        <UIcon name="i-lucide-loader-2" class="size-8 animate-spin text-primary" />
-        <p class="text-sm text-muted">Processing files...</p>
-      </div>
-      <div v-else class="flex flex-col items-center gap-3">
-        <UIcon name="i-lucide-upload-cloud" class="size-10 text-muted" />
+      <div class="flex flex-col items-center gap-3">
+        <UIcon name="i-lucide-upload-cloud" class="size-8 text-muted" />
         <div class="space-y-1">
           <p class="text-sm font-medium text-highlighted">
             Drop files here or click to upload
@@ -350,6 +380,7 @@ function formatFileSize(bytes: number | null): string {
             icon="i-lucide-folder-open"
             variant="soft"
             size="sm"
+            :disabled="isUploading"
             @click="($refs.fileInput as HTMLInputElement).click()"
           />
           <UButton
@@ -358,6 +389,7 @@ function formatFileSize(bytes: number | null): string {
             variant="soft"
             color="neutral"
             size="sm"
+            :disabled="isUploading"
             @click="showTextModal = true"
           />
         </div>
@@ -370,6 +402,73 @@ function formatFileSize(bytes: number | null): string {
         class="hidden"
         @change="onFileInput"
       >
+    </div>
+
+    <!-- Upload progress -->
+    <div v-if="uploadTasks.length" class="space-y-2">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-medium text-muted">
+          Uploads
+        </h3>
+        <UButton
+          v-if="!isUploading && hasCompletedUploads"
+          label="Clear"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          @click="uploadTasks = []"
+        />
+      </div>
+      <div class="space-y-1">
+        <div
+          v-for="task in uploadTasks"
+          :key="task.id"
+          class="flex items-center gap-3 px-3 py-2 rounded-lg bg-elevated"
+        >
+          <!-- Status icon -->
+          <div class="shrink-0">
+            <UIcon
+              v-if="task.status === 'pending'"
+              name="i-lucide-clock"
+              class="size-4 text-muted"
+            />
+            <UIcon
+              v-else-if="task.status === 'uploading'"
+              name="i-lucide-upload"
+              class="size-4 text-primary animate-pulse"
+            />
+            <UIcon
+              v-else-if="task.status === 'processing'"
+              name="i-lucide-loader-2"
+              class="size-4 text-primary animate-spin"
+            />
+            <UIcon
+              v-else-if="task.status === 'success'"
+              name="i-lucide-check-circle"
+              class="size-4 text-success"
+            />
+            <UIcon
+              v-else-if="task.status === 'error'"
+              name="i-lucide-x-circle"
+              class="size-4 text-error"
+            />
+          </div>
+
+          <!-- Filename and status -->
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium truncate" :class="task.status === 'error' ? 'text-error' : 'text-highlighted'">
+              {{ task.filename }}
+            </p>
+            <p class="text-xs text-muted">
+              <template v-if="task.status === 'pending'">Waiting...</template>
+              <template v-else-if="task.status === 'uploading'">Uploading...</template>
+              <template v-else-if="task.status === 'processing'">Processing & extracting text...</template>
+              <template v-else-if="task.status === 'success'">Complete</template>
+              <template v-else-if="task.status === 'error'">{{ task.error || 'Upload failed' }}</template>
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Search -->
