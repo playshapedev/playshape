@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { writeFileSync } from 'node:fs'
 import { z } from 'zod'
 import { libraries, documents, documentChunks } from '~~/server/database/schema'
+import { cleanupContent } from '~~/server/utils/contentCleanup'
 
 /**
  * Supported file extensions mapped to source type identifiers.
@@ -89,20 +90,25 @@ async function processTextDocument(
   const now = new Date()
   const id = crypto.randomUUID()
 
+  // Clean up the content using AI (if enabled)
+  const cleanup = await cleanupContent(content, title)
+  const finalTitle = cleanup.title || title
+  const finalContent = cleanup.text
+
   // Insert document
   db.insert(documents).values({
     id,
     libraryId,
-    title,
+    title: finalTitle,
     sourceType: 'text',
-    body: content,
+    body: finalContent,
     status: 'ready',
     createdAt: now,
     updatedAt: now,
   }).run()
 
   // Chunk the text and generate embeddings
-  const chunks = chunkText(content)
+  const chunks = chunkText(finalContent)
   const chunkTexts = chunks.map(c => c.text)
   const embeddings = await generateEmbeddings(chunkTexts)
 
@@ -167,14 +173,19 @@ async function processFileUpload(
     return db.select().from(documents).where(eq(documents.id, id)).get()
   }
 
-  // Update document with extracted text
+  // Clean up the extracted content using AI (if enabled)
+  const cleanup = await cleanupContent(extraction.text, title)
+  const finalTitle = cleanup.title || title
+  const finalContent = cleanup.text
+
+  // Update document with cleaned text and possibly better title
   db.update(documents)
-    .set({ body: extraction.text, status: 'ready', updatedAt: new Date() })
+    .set({ title: finalTitle, body: finalContent, status: 'ready', updatedAt: new Date() })
     .where(eq(documents.id, id))
     .run()
 
   // Chunk the text and generate embeddings
-  const chunks = chunkText(extraction.text)
+  const chunks = chunkText(finalContent)
   const chunkTexts = chunks.map(c => c.text)
   const embeddings = await generateEmbeddings(chunkTexts)
 

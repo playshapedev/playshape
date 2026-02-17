@@ -214,17 +214,17 @@ function cancelCustomInput() {
 
 /**
  * Format error messages for display. Extracts meaningful messages from
- * common LLM provider errors (rate limits, auth failures, connection issues).
+ * common AI provider errors (rate limits, auth failures, connection issues).
  */
 function formatError(error: Error): string {
   const msg = error.message || 'An unknown error occurred'
 
   // HTTP status codes from server
-  if (msg.includes('409')) return 'No active LLM provider configured. Go to Settings to add and activate a provider.'
+  if (msg.includes('409')) return 'No active AI provider configured. Go to Settings to add and activate a provider.'
   if (msg.includes('429') || msg.toLowerCase().includes('rate limit')) return 'Rate limit exceeded. Please wait a moment and try again.'
   if (msg.includes('401') || msg.includes('403') || msg.toLowerCase().includes('unauthorized') || msg.toLowerCase().includes('api key')) return 'Authentication failed. Check your API key in Settings.'
   if (msg.includes('404') && msg.toLowerCase().includes('model')) return 'Model not found. Check your provider configuration in Settings.'
-  if (msg.toLowerCase().includes('connection') || msg.toLowerCase().includes('econnrefused') || msg.toLowerCase().includes('fetch failed')) return 'Could not connect to the LLM provider. Make sure it is running and accessible.'
+  if (msg.toLowerCase().includes('connection') || msg.toLowerCase().includes('econnrefused') || msg.toLowerCase().includes('fetch failed')) return 'Could not connect to the AI provider. Make sure it is running and accessible.'
   if (msg.toLowerCase().includes('timeout')) return 'Request timed out. The model may be overloaded — try again.'
 
   return msg

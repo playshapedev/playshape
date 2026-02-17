@@ -3,6 +3,20 @@ import type { LLMProvider } from '~/composables/useLLMProviders'
 
 const toast = useToast()
 
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+const { settings, updateSettings } = useSettings()
+
+async function toggleContentCleanup() {
+  const newValue = !settings.value?.contentCleanupEnabled
+  await updateSettings({ contentCleanupEnabled: newValue })
+  toast.add({
+    title: newValue ? 'Content cleanup enabled' : 'Content cleanup disabled',
+    color: 'success',
+    icon: 'i-lucide-check',
+  })
+}
+
 // ─── Provider Data ───────────────────────────────────────────────────────────
 
 const { providers, pending, refresh } = useLLMProviders()
@@ -130,7 +144,7 @@ async function onTest(provider: LLMProvider) {
   <div class="max-w-5xl">
     <div class="flex items-center justify-between mb-4">
       <div>
-        <h2 class="text-lg font-semibold">LLM Providers</h2>
+        <h2 class="text-lg font-semibold">AI Providers</h2>
         <p class="text-sm text-muted">
           Configure AI models for activity generation. You can add multiple providers and switch between them.
         </p>
@@ -154,7 +168,7 @@ async function onTest(provider: LLMProvider) {
       v-else-if="!providers?.length"
       icon="i-lucide-bot"
       title="No providers configured"
-      description="Add an LLM provider to start generating AI-powered activities."
+      description="Add an AI provider to start generating AI-powered activities."
     >
       <UButton
         icon="i-lucide-plus"
@@ -175,13 +189,41 @@ async function onTest(provider: LLMProvider) {
         @test="onTest(provider)"
       />
     </div>
+
+    <!-- AI Features Section -->
+    <div class="mt-10 pt-8 border-t border-default">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold">AI Features</h2>
+        <p class="text-sm text-muted">
+          Configure how AI is used throughout the app.
+        </p>
+      </div>
+
+      <div class="flex items-start justify-between gap-4 p-4 rounded-lg bg-elevated">
+        <div>
+          <div class="font-medium">Content Cleanup</div>
+          <p class="text-sm text-muted mt-1">
+            When importing documents to a library, use AI to clean up extracted text by removing page numbers, headers, footers, copyright notices, and other artifacts.
+          </p>
+        </div>
+        <USwitch
+          :model-value="settings?.contentCleanupEnabled ?? false"
+          :disabled="!providers?.length"
+          @update:model-value="toggleContentCleanup"
+        />
+      </div>
+
+      <p v-if="!providers?.length" class="text-xs text-muted mt-2">
+        Add an AI provider above to enable AI features.
+      </p>
+    </div>
   </div>
 
   <!-- Add/Edit Provider Modal -->
   <UModal
     v-model:open="formModalOpen"
     :title="editingProvider ? 'Edit Provider' : 'Add Provider'"
-    :description="editingProvider ? 'Update this provider\'s configuration.' : 'Configure a new LLM provider for activity generation.'"
+    :description="editingProvider ? 'Update this provider\'s configuration.' : 'Configure a new AI provider for activity generation.'"
   >
     <template #body>
       <ProviderForm
