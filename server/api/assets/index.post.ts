@@ -1,5 +1,5 @@
-import { assets } from '~~/server/database/schema'
-import { generateAssetFilename, saveAssetFile } from '~~/server/utils/assetStorage'
+import { assets, assetImages } from '~~/server/database/schema'
+import { generateAssetImageFilename, saveAssetFile } from '~~/server/utils/assetStorage'
 
 /**
  * Create a new asset.
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const contentType = getHeader(event, 'content-type') || ''
   const db = useDb()
   const now = new Date()
-  const id = crypto.randomUUID()
+  const assetId = crypto.randomUUID()
 
   // Handle file upload (multipart/form-data)
   if (contentType.includes('multipart/form-data')) {
@@ -31,10 +31,24 @@ export default defineEventHandler(async (event) => {
     }
 
     const mimeType = fileField.type
-    const filename = generateAssetFilename(id, mimeType)
     const buffer = Buffer.from(fileField.data)
 
-    // Save file to disk
+    // Create asset record
+    const asset = {
+      id: assetId,
+      projectId: projectIdField?.data?.toString() || null,
+      type: mimeType.startsWith('image/') ? 'image' as const : 'audio' as const,
+      name: nameField?.data?.toString() || fileField.filename || 'Uploaded file',
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+    }
+
+    db.insert(assets).values(asset).run()
+
+    // Create image record
+    const imageId = crypto.randomUUID()
+    const filename = generateAssetImageFilename(imageId, mimeType)
     saveAssetFile(filename, buffer)
 
     // Get image dimensions if it's an image
@@ -46,26 +60,25 @@ export default defineEventHandler(async (event) => {
       height = dimensions.height
     }
 
-    // Create asset record
-    const asset = {
-      id,
-      projectId: projectIdField?.data?.toString() || null,
-      type: mimeType.startsWith('image/') ? 'image' as const : 'audio' as const,
-      name: nameField?.data?.toString() || fileField.filename || 'Uploaded file',
+    const image = {
+      id: imageId,
+      assetId,
       prompt: null,
       storagePath: filename,
       mimeType,
       width: width ?? null,
       height: height ?? null,
       fileSize: buffer.length,
-      messages: [],
       createdAt: now,
-      updatedAt: now,
     }
 
-    db.insert(assets).values(asset).run()
+    db.insert(assetImages).values(image).run()
 
-    return asset
+    return {
+      ...asset,
+      images: [image],
+      imageCount: 1,
+    }
   }
 
   // Handle JSON body (create empty asset for generation)
@@ -75,16 +88,10 @@ export default defineEventHandler(async (event) => {
   }>(event)
 
   const asset = {
-    id,
+    id: assetId,
     projectId: body.projectId || null,
     type: 'image' as const,
     name: body.name || 'Untitled',
-    prompt: null,
-    storagePath: '', // Will be set when image is generated
-    mimeType: null,
-    width: null,
-    height: null,
-    fileSize: null,
     messages: [],
     createdAt: now,
     updatedAt: now,
@@ -92,7 +99,11 @@ export default defineEventHandler(async (event) => {
 
   db.insert(assets).values(asset).run()
 
-  return asset
+  return {
+    ...asset,
+    images: [],
+    imageCount: 0,
+  }
 })
 
 /**

@@ -1,10 +1,10 @@
 import { z } from 'zod'
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
 import type { UIMessage } from 'ai'
-import { eq } from 'drizzle-orm'
-import { assets } from '~~/server/database/schema'
+import { eq, desc } from 'drizzle-orm'
+import { assets, assetImages } from '~~/server/database/schema'
 import { generateImage, getImageModelConfig, useActiveImageModel } from '~~/server/utils/imageGeneration'
-import { generateAssetFilename, saveAssetFile, getAssetUrl } from '~~/server/utils/assetStorage'
+import { generateAssetImageFilename, saveAssetFile, getAssetImageUrl } from '~~/server/utils/assetStorage'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 
 const SYSTEM_PROMPT = `You are an AI assistant helping users create and edit images. Your role is to:
@@ -101,48 +101,70 @@ export default defineLazyEventHandler(() => {
       tools: {
         ask_question: askQuestionTool,
         get_asset: tool({
-          description: 'Get the current asset details including name, dimensions, prompt used, and file URL.',
+          description: 'Get the current asset details including name and all generated images.',
           inputSchema: z.object({}),
           execute: async () => {
             const current = db.select().from(assets).where(eq(assets.id, id)).get()
             if (!current) return { error: 'Asset not found' }
+
+            // Get all images for this asset
+            const images = db
+              .select()
+              .from(assetImages)
+              .where(eq(assetImages.assetId, id))
+              .orderBy(desc(assetImages.createdAt))
+              .all()
+
             return {
               name: current.name,
-              prompt: current.prompt,
-              width: current.width,
-              height: current.height,
-              mimeType: current.mimeType,
-              fileUrl: current.storagePath ? getAssetUrl(id) : null,
-              hasImage: !!current.storagePath,
+              imageCount: images.length,
+              images: images.map(img => ({
+                id: img.id,
+                prompt: img.prompt,
+                width: img.width,
+                height: img.height,
+                mimeType: img.mimeType,
+                fileUrl: getAssetImageUrl(id, img.id),
+              })),
             }
           },
         }),
 
         generate_image: tool({
-          description: 'Generate an image from a text prompt and save it to this asset. Use detailed, descriptive prompts for best results.',
+          description: 'Generate a new image from a text prompt and add it to this asset. Use detailed, descriptive prompts for best results. Each generation creates a new image in the history.',
           inputSchema: z.object({
             prompt: z.string().describe('Detailed description of the image to generate. Include style, mood, composition, lighting, and other relevant details.'),
-            name: z.string().describe('A short, descriptive name for this image (2-5 words, no file extension).'),
+            name: z.string().describe('A short, descriptive name for this asset (2-5 words, no file extension). Only used to update the asset name if this is the first image.'),
           }),
           execute: async ({ prompt, name }) => {
             try {
               // Generate the image
               const result = await generateImage(prompt, imageModelConfig!)
 
-              // Save to disk
-              const filename = generateAssetFilename(id, result.mimeType)
+              // Create a new image record
+              const imageId = crypto.randomUUID()
+              const filename = generateAssetImageFilename(imageId, result.mimeType)
               saveAssetFile(filename, result.buffer)
 
-              // Update asset record
-              db.update(assets)
-                .set({
-                  name,
+              // Insert new image record
+              db.insert(assetImages)
+                .values({
+                  id: imageId,
+                  assetId: id,
                   prompt,
                   storagePath: filename,
                   mimeType: result.mimeType,
                   width: result.width ?? null,
                   height: result.height ?? null,
                   fileSize: result.buffer.length,
+                  createdAt: new Date(),
+                })
+                .run()
+
+              // Update asset name and timestamp
+              db.update(assets)
+                .set({
+                  name,
                   updatedAt: new Date(),
                 })
                 .where(eq(assets.id, id))
@@ -150,11 +172,12 @@ export default defineLazyEventHandler(() => {
 
               return {
                 success: true,
+                imageId,
                 name,
                 prompt,
                 width: result.width,
                 height: result.height,
-                fileUrl: getAssetUrl(id),
+                fileUrl: getAssetImageUrl(id, imageId),
                 mimeType: result.mimeType,
                 fileSize: result.buffer.length,
               }

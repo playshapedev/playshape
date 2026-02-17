@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm'
-import { assets } from '~~/server/database/schema'
+import { assets, assetImages } from '~~/server/database/schema'
 import { deleteAssetFile } from '~~/server/utils/assetStorage'
 
 /**
- * Delete an asset and its file.
+ * Delete an asset and all its images.
  * DELETE /api/assets/:id
  */
 export default defineEventHandler(async (event) => {
@@ -19,12 +19,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
   }
 
-  // Delete the file from disk
-  if (asset.storagePath) {
-    deleteAssetFile(asset.storagePath)
+  // Get all images for this asset and delete their files
+  const images = db.select().from(assetImages).where(eq(assetImages.assetId, id)).all()
+  for (const image of images) {
+    deleteAssetFile(image.storagePath)
   }
 
-  // Delete the database record
+  // Delete the database records (cascade will delete asset_images)
   db.delete(assets).where(eq(assets.id, id)).run()
 
   setResponseStatus(event, 204)

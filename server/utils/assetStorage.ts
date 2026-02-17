@@ -37,13 +37,24 @@ export function getAssetFilePath(filename: string): string {
 }
 
 /**
- * Generate a storage filename for an asset.
+ * Generate a storage filename for an asset (legacy, single image per asset).
  * @param assetId - The asset's UUID
  * @param mimeType - The MIME type (e.g., "image/png")
+ * @deprecated Use generateAssetImageFilename for new code
  */
 export function generateAssetFilename(assetId: string, mimeType: string): string {
   const ext = mimeTypeToExtension(mimeType)
   return `${assetId}${ext}`
+}
+
+/**
+ * Generate a storage filename for an asset image.
+ * @param imageId - The asset image's UUID
+ * @param mimeType - The MIME type (e.g., "image/png")
+ */
+export function generateAssetImageFilename(imageId: string, mimeType: string): string {
+  const ext = mimeTypeToExtension(mimeType)
+  return `${imageId}${ext}`
 }
 
 /**
@@ -123,9 +134,19 @@ export function extensionToMimeType(ext: string): string {
 }
 
 /**
- * Get the API URL for serving an asset file.
+ * Get the API URL for serving an asset file (legacy, single image per asset).
  * @param assetId - The asset's UUID
+ * @deprecated Use getAssetImageUrl for new code
  */
 export function getAssetUrl(assetId: string): string {
   return `/api/assets/${assetId}/file`
+}
+
+/**
+ * Get the API URL for serving an asset image file.
+ * @param assetId - The parent asset's UUID
+ * @param imageId - The asset image's UUID
+ */
+export function getAssetImageUrl(assetId: string, imageId: string): string {
+  return `/api/assets/${assetId}/images/${imageId}/file`
 }

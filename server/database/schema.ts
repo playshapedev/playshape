@@ -309,15 +309,22 @@ export const assets = sqliteTable('assets', {
   projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }), // nullable for global assets
   type: text('type').$type<AssetType>().notNull().default('image'),
   name: text('name').notNull(),
-  prompt: text('prompt'), // generation prompt if AI-generated
-  storagePath: text('storage_path').notNull(), // relative path within assets directory
-  mimeType: text('mime_type'),
-  width: integer('width'), // for images
-  height: integer('height'), // for images
-  fileSize: integer('file_size'), // bytes
   messages: text('messages', { mode: 'json' }).$type<AssetMessage[]>().default([]),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// Individual images within an asset (supports multiple generations per chat)
+export const assetImages = sqliteTable('asset_images', {
+  id: text('id').primaryKey(),
+  assetId: text('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  prompt: text('prompt'), // generation prompt
+  storagePath: text('storage_path').notNull(), // relative path within assets directory
+  mimeType: text('mime_type'),
+  width: integer('width'),
+  height: integer('height'),
+  fileSize: integer('file_size'), // bytes
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
 export interface AssetMessage {

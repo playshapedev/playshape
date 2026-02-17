@@ -1,37 +1,28 @@
-import { eq, desc } from 'drizzle-orm'
-import { assets, assetImages } from '~~/server/database/schema'
+import { eq, and } from 'drizzle-orm'
+import { assetImages } from '~~/server/database/schema'
 import { readAssetFile, extensionToMimeType } from '~~/server/utils/assetStorage'
 
 /**
- * Serve the most recent image file for an asset.
- * GET /api/assets/:id/file
- *
- * @deprecated Use /api/assets/:id/images/:imageId/file instead
+ * Serve an asset image file.
+ * GET /api/assets/:id/images/:imageId/file
  */
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, 'id')
-  if (!id) {
-    throw createError({ statusCode: 400, statusMessage: 'Asset ID is required' })
+  const assetId = getRouterParam(event, 'id')
+  const imageId = getRouterParam(event, 'imageId')
+
+  if (!assetId || !imageId) {
+    throw createError({ statusCode: 400, statusMessage: 'Asset ID and Image ID are required' })
   }
 
   const db = useDb()
-  const asset = db.select().from(assets).where(eq(assets.id, id)).get()
-
-  if (!asset) {
-    throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
-  }
-
-  // Get the most recent image for this asset
   const image = db
     .select()
     .from(assetImages)
-    .where(eq(assetImages.assetId, id))
-    .orderBy(desc(assetImages.createdAt))
-    .limit(1)
+    .where(and(eq(assetImages.id, imageId), eq(assetImages.assetId, assetId)))
     .get()
 
   if (!image) {
-    throw createError({ statusCode: 404, statusMessage: 'Asset has no images' })
+    throw createError({ statusCode: 404, statusMessage: 'Image not found' })
   }
 
   const fileBuffer = readAssetFile(image.storagePath)

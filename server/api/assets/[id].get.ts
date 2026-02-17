@@ -1,8 +1,8 @@
-import { eq } from 'drizzle-orm'
-import { assets } from '~~/server/database/schema'
+import { eq, desc } from 'drizzle-orm'
+import { assets, assetImages } from '~~/server/database/schema'
 
 /**
- * Get a single asset by ID.
+ * Get a single asset by ID with its images.
  * GET /api/assets/:id
  */
 export default defineEventHandler(async (event) => {
@@ -18,5 +18,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Asset not found' })
   }
 
-  return asset
+  // Get all images for this asset
+  const images = db
+    .select()
+    .from(assetImages)
+    .where(eq(assetImages.assetId, id))
+    .orderBy(desc(assetImages.createdAt))
+    .all()
+
+  return {
+    ...asset,
+    images,
+    imageCount: images.length,
+  }
 })

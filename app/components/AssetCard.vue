@@ -1,16 +1,17 @@
 <script setup lang="ts">
-import type { Asset } from '~/composables/useAssets'
+import type { AssetWithImages } from '~/composables/useAssets'
 
-defineProps<{
-  asset: Asset
+const props = defineProps<{
+  asset: AssetWithImages
 }>()
 
-function formatFileSize(bytes: number | null) {
-  if (!bytes) return ''
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+// Get the most recent image (first in the array since sorted by createdAt desc)
+const latestImage = computed(() => props.asset.images?.[0] || null)
+
+const thumbnailUrl = computed(() => {
+  if (!latestImage.value) return null
+  return getAssetImageUrl(props.asset.id, latestImage.value.id)
+})
 </script>
 
 <template>
@@ -21,14 +22,22 @@ function formatFileSize(bytes: number | null) {
     >
       <!-- Image preview -->
       <div
-        v-if="asset.storagePath"
-        class="aspect-square w-full overflow-hidden bg-elevated"
+        v-if="thumbnailUrl"
+        class="aspect-square w-full overflow-hidden bg-elevated relative"
       >
         <img
-          :src="getAssetFileUrl(asset.id)"
+          :src="thumbnailUrl"
           :alt="asset.name"
           class="w-full h-full object-cover"
         >
+        <!-- Image count badge -->
+        <div
+          v-if="asset.imageCount > 1"
+          class="absolute bottom-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-xs font-medium flex items-center gap-1"
+        >
+          <UIcon name="i-lucide-images" class="size-3" />
+          {{ asset.imageCount }}
+        </div>
       </div>
       <!-- Placeholder when no image yet -->
       <div
@@ -44,11 +53,17 @@ function formatFileSize(bytes: number | null) {
           {{ asset.name }}
         </h3>
         <div class="flex items-center gap-2 text-xs text-dimmed">
-          <span v-if="asset.width && asset.height">
-            {{ asset.width }} x {{ asset.height }}
+          <span v-if="latestImage?.width && latestImage.height">
+            {{ latestImage.width }} x {{ latestImage.height }}
           </span>
-          <span v-if="asset.fileSize">
-            {{ formatFileSize(asset.fileSize) }}
+          <span v-if="asset.imageCount === 0">
+            No images
+          </span>
+          <span v-else-if="asset.imageCount === 1">
+            1 image
+          </span>
+          <span v-else>
+            {{ asset.imageCount }} images
           </span>
         </div>
       </div>
