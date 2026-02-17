@@ -75,9 +75,23 @@ onMounted(() => {
 
 const enabledModelIds = computed(() => new Set(props.provider.models.map(m => m.modelId)))
 
-// Available models grouped by purpose
-const textModels = computed(() => availableModels.value.filter(m => m.purpose === 'text'))
-const imageModels = computed(() => availableModels.value.filter(m => m.purpose === 'image'))
+// Search filter
+const modelSearch = ref('')
+
+// Available models grouped by purpose, filtered by search
+const textModels = computed(() => {
+  const search = modelSearch.value.toLowerCase().trim()
+  return availableModels.value
+    .filter(m => m.purpose === 'text')
+    .filter(m => !search || m.name.toLowerCase().includes(search) || m.id.toLowerCase().includes(search))
+})
+
+const imageModels = computed(() => {
+  const search = modelSearch.value.toLowerCase().trim()
+  return availableModels.value
+    .filter(m => m.purpose === 'image')
+    .filter(m => !search || m.name.toLowerCase().includes(search) || m.id.toLowerCase().includes(search))
+})
 
 async function toggleModel(model: ModelInfo) {
   const isEnabled = enabledModelIds.value.has(model.id)
@@ -184,6 +198,15 @@ async function toggleModel(model: ModelInfo) {
       </div>
       <p class="text-sm text-muted">Select the models you want to use. Click on an enabled model in the provider card to set it as active.</p>
 
+      <!-- Search -->
+      <UInput
+        v-if="availableModels.length > 5"
+        v-model="modelSearch"
+        icon="i-lucide-search"
+        placeholder="Search models..."
+        class="w-full"
+      />
+
       <!-- Loading -->
       <div v-if="loadingModels && availableModels.length === 0" class="space-y-2">
         <USkeleton class="h-12 w-full" />
@@ -207,10 +230,7 @@ async function toggleModel(model: ModelInfo) {
               class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
               @click="toggleModel(model)"
             >
-              <div>
-                <p class="font-medium">{{ model.name }}</p>
-                <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
-              </div>
+              <span class="font-medium">{{ model.name }}</span>
               <UIcon
                 :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
                 :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"
@@ -230,10 +250,7 @@ async function toggleModel(model: ModelInfo) {
               class="w-full flex items-center justify-between p-3 rounded-lg hover:bg-elevated transition-colors text-left"
               @click="toggleModel(model)"
             >
-              <div>
-                <p class="font-medium">{{ model.name }}</p>
-                <p v-if="model.description" class="text-sm text-muted">{{ model.description }}</p>
-              </div>
+              <span class="font-medium">{{ model.name }}</span>
               <UIcon
                 :name="enabledModelIds.has(model.id) ? 'i-lucide-check-circle' : 'i-lucide-circle'"
                 :class="enabledModelIds.has(model.id) ? 'text-primary' : 'text-muted'"

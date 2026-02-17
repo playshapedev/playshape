@@ -172,15 +172,9 @@ async function onActivateModel(modelId: string, purpose: AIModelPurpose) {
         />
       </div>
 
-      <!-- Loading -->
-      <div v-if="pending" class="space-y-3">
-        <USkeleton class="h-24 w-full" />
-        <USkeleton class="h-24 w-full" />
-      </div>
-
       <!-- Empty State -->
       <EmptyState
-        v-else-if="!providers?.length"
+        v-if="!providers?.length"
         icon="i-lucide-bot"
         title="No providers configured"
         description="Add an AI provider to start using text and image generation."
