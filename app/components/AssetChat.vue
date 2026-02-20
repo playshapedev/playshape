@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { UIMessage } from 'ai'
+import type { UIMessage, FileUIPart } from 'ai'
 import type { AIProviderType } from '~/composables/useAIProviders'
+import { ASPECT_RATIOS, DEFAULT_ASPECT_RATIO } from '~/utils/aspectRatios'
 
 const props = defineProps<{
   assetId: string
@@ -10,6 +11,37 @@ const props = defineProps<{
 const emit = defineEmits<{
   update: []
 }>()
+
+// ─── Image Attachments ───────────────────────────────────────────────────────
+
+const {
+  pendingAttachments,
+  isUploading,
+  uploadError,
+  hasPending,
+  addFiles,
+  handlePaste,
+  removeAttachment,
+  uploadAttachments,
+} = useChatAttachments()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+function onFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    addFiles(input.files)
+    input.value = '' // Reset so the same file can be selected again
+  }
+}
+
+// ─── Settings (for sticky aspect ratio) ──────────────────────────────────────
+
+const { settings, updateSettings } = useSettings()
 
 // ─── Image Model Selection ───────────────────────────────────────────────────
 
@@ -81,12 +113,53 @@ const selectedModelLabel = computed(() => {
   return model ? model.name : 'Select model'
 })
 
+// ─── Aspect Ratio Selection ──────────────────────────────────────────────────
+
+// Initialize from settings (sticky preference)
+const selectedAspectRatio = ref(DEFAULT_ASPECT_RATIO)
+
+// Sync with settings when loaded
+watch(() => settings.value?.imageAspectRatio, (ratio) => {
+  if (ratio) {
+    selectedAspectRatio.value = ratio
+  }
+}, { immediate: true })
+
+// When user selects a different aspect ratio, persist it
+async function selectAspectRatio(ratio: string) {
+  if (ratio === selectedAspectRatio.value) return
+
+  selectedAspectRatio.value = ratio
+
+  try {
+    await updateSettings({ imageAspectRatio: ratio })
+  }
+  catch (error) {
+    console.error('Failed to save aspect ratio preference:', error)
+  }
+}
+
+// Aspect ratio selector items
+const aspectRatioItems = computed(() =>
+  ASPECT_RATIOS.map(r => ({
+    label: r.label,
+    description: r.description,
+    value: r.value,
+  })),
+)
+
+const selectedAspectRatioLabel = computed(() => {
+  const ratio = ASPECT_RATIOS.find(r => r.value === selectedAspectRatio.value)
+  return ratio ? ratio.label : 'Square'
+})
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 const { chat, sendMessage, stopGeneration, onAssetUpdate } = useAssetChat(
   props.assetId,
   props.initialMessages,
   selectedModelId,
+  selectedAspectRatio,
 )
 
 onAssetUpdate.value = () => emit('update')
@@ -124,11 +197,30 @@ const pendingQuestion = computed(() => {
   return null
 })
 
-function handleSend() {
-  if (!input.value.trim() || chat.status !== 'ready') return
+async function handleSend() {
+  if (chat.status !== 'ready') return
+  if (!input.value.trim() && !hasPending.value) return
+
   const text = input.value.trim()
   input.value = ''
-  sendMessage(text)
+
+  // Upload attachments if any
+  let files: FileUIPart[] | undefined
+  if (hasPending.value) {
+    try {
+      const messageId = crypto.randomUUID()
+      files = await uploadAttachments({
+        assetId: props.assetId,
+        messageId,
+      })
+    }
+    catch {
+      // Error is already set in uploadError, don't send the message
+      return
+    }
+  }
+
+  sendMessage(text, files)
 }
 
 function handleAnswer(value: string) {
@@ -281,8 +373,13 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
+function onPaste(event: ClipboardEvent) {
+  handlePaste(event)
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('paste', onPaste)
 
   if (messagesContainer.value) {
     // Track container (viewport) height for spacer calculations
@@ -338,6 +435,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('paste', onPaste)
   containerObserver?.disconnect()
   contentObserver?.disconnect()
 })
@@ -345,38 +443,75 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
-    <!-- Model selector header -->
-    <div class="border-b border-default p-3 flex items-center gap-2">
-      <span class="text-sm text-muted">Model:</span>
-      <UDropdownMenu
-        :items="modelSelectorItems"
-        :ui="{ content: 'w-64' }"
-      >
-        <UButton
-          variant="ghost"
-          color="neutral"
-          size="sm"
-          trailing-icon="i-lucide-chevron-down"
+    <!-- Model and aspect ratio selector header -->
+    <div class="border-b border-default p-3 flex items-center gap-4">
+      <!-- Model selector -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-muted">Model:</span>
+        <UDropdownMenu
+          :items="modelSelectorItems"
+          :ui="{ content: 'w-64' }"
         >
-          {{ selectedModelLabel }}
-        </UButton>
-        <template #item="{ item }">
-          <div
-            class="flex items-center justify-between w-full"
-            @click="selectModel(item.value)"
+          <UButton
+            variant="ghost"
+            color="neutral"
+            size="sm"
+            trailing-icon="i-lucide-chevron-down"
           >
-            <div>
-              <div class="font-medium">{{ item.label }}</div>
-              <div class="text-xs text-muted">{{ item.description }}</div>
+            {{ selectedModelLabel }}
+          </UButton>
+          <template #item="{ item }">
+            <div
+              class="flex items-center justify-between w-full"
+              @click="selectModel(item.value)"
+            >
+              <div>
+                <div class="font-medium">{{ item.label }}</div>
+                <div class="text-xs text-muted">{{ item.description }}</div>
+              </div>
+              <UIcon
+                v-if="item.value === selectedModelId"
+                name="i-lucide-check"
+                class="size-4 text-primary"
+              />
             </div>
-            <UIcon
-              v-if="item.value === selectedModelId"
-              name="i-lucide-check"
-              class="size-4 text-primary"
-            />
-          </div>
-        </template>
-      </UDropdownMenu>
+          </template>
+        </UDropdownMenu>
+      </div>
+
+      <!-- Aspect ratio selector -->
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-muted">Ratio:</span>
+        <UDropdownMenu
+          :items="aspectRatioItems"
+          :ui="{ content: 'w-48' }"
+        >
+          <UButton
+            variant="ghost"
+            color="neutral"
+            size="sm"
+            trailing-icon="i-lucide-chevron-down"
+          >
+            {{ selectedAspectRatioLabel }}
+          </UButton>
+          <template #item="{ item }">
+            <div
+              class="flex items-center justify-between w-full"
+              @click="selectAspectRatio(item.value)"
+            >
+              <div class="flex items-center gap-3">
+                <span class="text-xs text-muted w-10">{{ item.description }}</span>
+                <span class="font-medium">{{ item.label }}</span>
+              </div>
+              <UIcon
+                v-if="item.value === selectedAspectRatio"
+                name="i-lucide-check"
+                class="size-4 text-primary"
+              />
+            </div>
+          </template>
+        </UDropdownMenu>
+      </div>
     </div>
 
     <!-- Messages (scroll container) -->
@@ -416,6 +551,14 @@ onUnmounted(() => {
               <!-- Text -->
               <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
               <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
+
+              <!-- Attached image -->
+              <img
+                v-else-if="part.type === 'file' && (part as FileUIPart).mediaType?.startsWith('image/')"
+                :src="(part as FileUIPart).url"
+                :alt="(part as FileUIPart).filename || 'Attached image'"
+                class="max-w-full max-h-64 rounded-lg mt-2 object-contain"
+              >
 
               <!-- Generate image: in progress -->
               <div
@@ -548,8 +691,59 @@ onUnmounted(() => {
     </div>
 
     <!-- Text input (hidden when question is pending) -->
-    <div v-else class="border-t border-default p-4">
+    <div v-else class="border-t border-default p-4 space-y-3">
+      <!-- Pending attachments preview -->
+      <div v-if="pendingAttachments.length" class="flex flex-wrap gap-2">
+        <div
+          v-for="attachment in pendingAttachments"
+          :key="attachment.id"
+          class="relative group"
+        >
+          <img
+            :src="attachment.previewUrl"
+            :alt="attachment.file.name"
+            class="h-16 w-16 object-cover rounded-lg border border-default"
+          >
+          <button
+            type="button"
+            class="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            @click="removeAttachment(attachment.id)"
+          >
+            <UIcon name="i-lucide-x" class="size-3" />
+          </button>
+        </div>
+        <div v-if="isUploading" class="h-16 w-16 rounded-lg border border-default flex items-center justify-center bg-elevated">
+          <UIcon name="i-lucide-loader-2" class="size-5 animate-spin text-muted" />
+        </div>
+      </div>
+
+      <!-- Upload error -->
+      <div v-if="uploadError" class="text-xs text-error flex items-center gap-1">
+        <UIcon name="i-lucide-alert-circle" class="size-3.5" />
+        {{ uploadError }}
+      </div>
+
+      <!-- Input row -->
       <div class="flex items-end gap-2">
+        <!-- Hidden file input -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          multiple
+          class="hidden"
+          @change="onFileSelect"
+        >
+
+        <!-- Attachment button -->
+        <UButton
+          icon="i-lucide-paperclip"
+          variant="ghost"
+          color="neutral"
+          :disabled="isRunning || isUploading"
+          @click="openFilePicker"
+        />
+
         <UTextarea
           v-model="input"
           placeholder="Describe the image you want..."
@@ -557,7 +751,7 @@ onUnmounted(() => {
           autoresize
           :rows="1"
           :maxrows="6"
-          :disabled="isRunning"
+          :disabled="isRunning || isUploading"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="isRunning && stopGeneration()"
         />
@@ -571,12 +765,15 @@ onUnmounted(() => {
         <UButton
           v-else
           icon="i-lucide-send"
-          :disabled="!input.trim() || !imageModels.length"
+          :disabled="(!input.trim() && !hasPending) || !imageModels.length || isUploading"
           @click="handleSend"
         />
       </div>
-      <p v-if="!imageModels.length" class="text-xs text-muted mt-2">
+      <p v-if="!imageModels.length" class="text-xs text-muted">
         Enable an image model in Settings > AI Providers to generate images.
+      </p>
+      <p v-else class="text-xs text-muted">
+        Paste or attach images to include as reference.
       </p>
     </div>
   </div>

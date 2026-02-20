@@ -40,6 +40,11 @@ export const SETTINGS = {
     key: 'content_cleanup_enabled',
     default: false as boolean,
   },
+  /** Default aspect ratio for image generation */
+  imageAspectRatio: {
+    key: 'image_aspect_ratio',
+    default: '1:1' as string,
+  },
 } as const
 
 /**
@@ -51,4 +56,12 @@ export function getContentCleanupEnabled(): boolean {
 
 export function setContentCleanupEnabled(value: boolean): void {
   setSetting(SETTINGS.contentCleanupEnabled.key, value)
+}
+
+export function getImageAspectRatio(): string {
+  return getSetting(SETTINGS.imageAspectRatio.key, SETTINGS.imageAspectRatio.default)
+}
+
+export function setImageAspectRatio(value: string): void {
+  setSetting(SETTINGS.imageAspectRatio.key, value)
 }

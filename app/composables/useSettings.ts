@@ -1,5 +1,6 @@
 export interface AppSettings {
   contentCleanupEnabled: boolean
+  imageAspectRatio: string
 }
 
 /**

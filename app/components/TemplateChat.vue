@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UIMessage } from 'ai'
+import type { UIMessage, FileUIPart } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
 
 /**
@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
   /** External chat instance — when provided, templateId is ignored */
   chatInstance?: {
     chat: Chat<UIMessage>
-    sendMessage: (content: string) => void
+    sendMessage: (content: string, files?: FileUIPart[]) => void
     stopGeneration: () => Promise<void>
     reportPreviewError: (error: string) => void
   }
@@ -79,7 +79,7 @@ const templateChat = props.chatInstance
   : useTemplateChat(props.templateId!, props.initialMessages)
 
 const chat: Chat<UIMessage> = props.chatInstance ? props.chatInstance.chat : templateChat!.chat
-const sendMessage: (content: string) => void = props.chatInstance ? props.chatInstance.sendMessage : templateChat!.sendMessage
+const sendMessage: (content: string, files?: FileUIPart[]) => void = props.chatInstance ? props.chatInstance.sendMessage : templateChat!.sendMessage
 const stopGeneration: () => Promise<void> = props.chatInstance ? props.chatInstance.stopGeneration : templateChat!.stopGeneration
 const reportPreviewError: (error: string) => void = props.chatInstance ? props.chatInstance.reportPreviewError : templateChat!.reportPreviewError
 
@@ -94,6 +94,37 @@ if (templateChat) {
 defineExpose({ reportPreviewError })
 
 const isRunning = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
+
+// ─── Image Attachments ───────────────────────────────────────────────────────
+
+const {
+  pendingAttachments,
+  isUploading,
+  uploadError,
+  hasPending,
+  addFiles,
+  handlePaste,
+  removeAttachment,
+  uploadAttachments,
+} = useChatAttachments()
+
+const fileInputRef = ref<HTMLInputElement | null>(null)
+
+function openFilePicker() {
+  fileInputRef.value?.click()
+}
+
+function onFileSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  if (input.files) {
+    addFiles(input.files)
+    input.value = '' // Reset so the same file can be selected again
+  }
+}
+
+function onPaste(event: ClipboardEvent) {
+  handlePaste(event)
+}
 
 /**
  * Check if a message is an auto-reported preview error.
@@ -170,16 +201,37 @@ function onKeyDown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('paste', onPaste)
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('paste', onPaste)
 })
 
-function handleSend() {
-  if (!input.value.trim() || chat.status !== 'ready') return
+async function handleSend() {
+  if (chat.status !== 'ready') return
+  if (!input.value.trim() && !hasPending.value) return
+
   const text = input.value.trim()
   input.value = ''
-  sendMessage(text)
+
+  // Upload attachments if any
+  let files: FileUIPart[] | undefined
+  if (hasPending.value && props.templateId) {
+    try {
+      const messageId = crypto.randomUUID()
+      files = await uploadAttachments({
+        templateId: props.templateId,
+        messageId,
+      })
+    }
+    catch {
+      // Error is already set in uploadError, don't send the message
+      return
+    }
+  }
+
+  sendMessage(text, files)
 }
 
 function handleAnswer(value: string) {
@@ -445,6 +497,14 @@ watch(() => visibleMessages.value.length, (count) => {
                 <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
                 <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
 
+                <!-- Attached image -->
+                <img
+                  v-else-if="part.type === 'file' && (part as FileUIPart).mediaType?.startsWith('image/')"
+                  :src="(part as FileUIPart).url"
+                  :alt="(part as FileUIPart).filename || 'Attached image'"
+                  class="max-w-full max-h-64 rounded-lg mt-2 object-contain"
+                >
+
                 <!-- Tool indicators (driven by toolIndicators prop) -->
                 <template v-else-if="part.type.startsWith('tool-') && part.type !== 'tool-ask_question' && toolIndicators[part.type]">
                   <!-- Tool in progress -->
@@ -534,15 +594,6 @@ watch(() => visibleMessages.value.length, (count) => {
                 >
                   <UIcon name="i-lucide-book-open" class="size-3.5" />
                   Loaded {{ (part as any).input?.topic || 'reference' }} docs
-                </div>
-
-                <!-- Ask question indicator -->
-                <div
-                  v-else-if="part.type === 'tool-ask_question'"
-                  class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
-                >
-                  <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
-                  {{ (part as any).input?.question || 'Asked a question' }}
                 </div>
               </template>
             </div>
@@ -638,8 +689,59 @@ watch(() => visibleMessages.value.length, (count) => {
     </div>
 
     <!-- Text input (hidden when question is pending) -->
-    <div v-else class="border-t border-default p-4">
+    <div v-else class="border-t border-default p-4 space-y-3">
+      <!-- Pending attachments preview -->
+      <div v-if="pendingAttachments.length" class="flex flex-wrap gap-2">
+        <div
+          v-for="attachment in pendingAttachments"
+          :key="attachment.id"
+          class="relative group"
+        >
+          <img
+            :src="attachment.previewUrl"
+            :alt="attachment.file.name"
+            class="h-16 w-16 object-cover rounded-lg border border-default"
+          >
+          <button
+            type="button"
+            class="absolute -top-1.5 -right-1.5 size-5 rounded-full bg-error text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            @click="removeAttachment(attachment.id)"
+          >
+            <UIcon name="i-lucide-x" class="size-3" />
+          </button>
+        </div>
+        <div v-if="isUploading" class="h-16 w-16 rounded-lg border border-default flex items-center justify-center bg-elevated">
+          <UIcon name="i-lucide-loader-2" class="size-5 animate-spin text-muted" />
+        </div>
+      </div>
+
+      <!-- Upload error -->
+      <div v-if="uploadError" class="text-xs text-error flex items-center gap-1">
+        <UIcon name="i-lucide-alert-circle" class="size-3.5" />
+        {{ uploadError }}
+      </div>
+
+      <!-- Input row -->
       <div class="flex items-end gap-2">
+        <!-- Hidden file input -->
+        <input
+          ref="fileInputRef"
+          type="file"
+          accept="image/*"
+          multiple
+          class="hidden"
+          @change="onFileSelect"
+        >
+
+        <!-- Attachment button -->
+        <UButton
+          icon="i-lucide-paperclip"
+          variant="ghost"
+          color="neutral"
+          :disabled="isRunning || isUploading"
+          @click="openFilePicker"
+        />
+
         <UTextarea
           v-model="input"
           :placeholder="placeholder"
@@ -647,7 +749,7 @@ watch(() => visibleMessages.value.length, (count) => {
           autoresize
           :rows="1"
           :maxrows="6"
-          :disabled="isRunning"
+          :disabled="isRunning || isUploading"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="isRunning && stopGeneration()"
         />
@@ -663,10 +765,13 @@ watch(() => visibleMessages.value.length, (count) => {
         <UButton
           v-else
           icon="i-lucide-send"
-          :disabled="!input.trim()"
+          :disabled="(!input.trim() && !hasPending) || isUploading"
           @click="handleSend"
         />
       </div>
+      <p class="text-xs text-muted">
+        Paste or attach images to include as reference.
+      </p>
     </div>
   </div>
 </template>

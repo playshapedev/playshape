@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm'
-import { assets, assetImages } from '~~/server/database/schema'
+import { assets, assetImages, chatAttachments } from '~~/server/database/schema'
 import { deleteAssetFile } from '~~/server/utils/assetStorage'
+import { deleteAttachmentFile } from '~~/server/utils/attachmentStorage'
 
 /**
- * Delete an asset and all its images.
+ * Delete an asset and all its images and attachments.
  * DELETE /api/assets/:id
  */
 export default defineEventHandler(async (event) => {
@@ -25,7 +26,13 @@ export default defineEventHandler(async (event) => {
     deleteAssetFile(image.storagePath)
   }
 
-  // Delete the database records (cascade will delete asset_images)
+  // Get all chat attachments for this asset and delete their files
+  const attachments = db.select().from(chatAttachments).where(eq(chatAttachments.assetId, id)).all()
+  for (const attachment of attachments) {
+    deleteAttachmentFile(attachment.storagePath)
+  }
+
+  // Delete the database records (cascade will delete asset_images and chat_attachments)
   db.delete(assets).where(eq(assets.id, id)).run()
 
   setResponseStatus(event, 204)

@@ -337,6 +337,24 @@ export interface AssetMessage {
   }>
 }
 
+// ─── Chat Attachments ────────────────────────────────────────────────────────
+// User-uploaded images attached to chat messages. Stored on disk with metadata
+// in this table. Can belong to either an asset or template chat.
+
+export const chatAttachments = sqliteTable('chat_attachments', {
+  id: text('id').primaryKey(),
+  assetId: text('asset_id').references(() => assets.id, { onDelete: 'cascade' }),
+  templateId: text('template_id').references(() => templates.id, { onDelete: 'cascade' }),
+  messageId: text('message_id').notNull(), // Links to UIMessage.id in the chat
+  storagePath: text('storage_path').notNull(), // relative path within attachments directory
+  mimeType: text('mime_type').notNull(), // typically 'image/webp' after processing
+  filename: text('filename'), // original filename if available
+  width: integer('width'),
+  height: integer('height'),
+  fileSize: integer('file_size'), // bytes
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Settings ────────────────────────────────────────────────────────────────
 // Key-value store for app settings. General preferences live here.
 

@@ -1,8 +1,6 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
-import type { UIMessage } from 'ai'
-
-export type { UIMessage }
+import type { UIMessage, FileUIPart } from 'ai'
 
 /**
  * Creates a Chat instance for an asset's AI image generation conversation.
@@ -14,6 +12,7 @@ export function useAssetChat(
   assetId: string,
   initialMessages: UIMessage[] = [],
   modelId?: Ref<string | undefined>,
+  aspectRatio?: Ref<string | undefined>,
 ) {
   const onAssetUpdate = ref<(() => void) | null>(null)
 
@@ -26,6 +25,7 @@ export function useAssetChat(
       api: `/api/assets/${assetId}/chat`,
       body: () => ({
         modelId: modelId?.value,
+        aspectRatio: aspectRatio?.value,
       }),
     }),
     onFinish: async () => {
@@ -44,11 +44,18 @@ export function useAssetChat(
   })
 
   /**
-   * Send a text message from the user.
+   * Send a message from the user, optionally with file attachments.
    */
-  function sendMessage(content: string) {
-    if (!content.trim() || chat.status === 'streaming' || chat.status === 'submitted') return
-    chat.sendMessage({ text: content })
+  function sendMessage(content: string, files?: FileUIPart[]) {
+    if (chat.status === 'streaming' || chat.status === 'submitted') return
+    if (!content.trim() && (!files || files.length === 0)) return
+
+    if (files && files.length > 0) {
+      chat.sendMessage({ text: content, files })
+    }
+    else {
+      chat.sendMessage({ text: content })
+    }
   }
 
   /**

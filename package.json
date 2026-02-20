@@ -66,6 +66,7 @@
     "lz-string": "^1.5.0",
     "mammoth": "^1.11.0",
     "ollama-ai-provider-v2": "^3.3.0",
+    "openai": "^6.22.0",
     "pdf-parse": "^2.4.5",
     "replicate": "^1.4.0",
     "scorm-again": "^3.0.1",

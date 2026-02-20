@@ -1,8 +1,6 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
-import type { UIMessage } from 'ai'
-
-export type { UIMessage }
+import type { UIMessage, FileUIPart } from 'ai'
 
 /**
  * Creates a Chat instance for a template's AI conversation.
@@ -42,11 +40,18 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
   })
 
   /**
-   * Send a text message from the user.
+   * Send a message from the user, optionally with file attachments.
    */
-  function sendMessage(content: string) {
-    if (!content.trim() || chat.status === 'streaming' || chat.status === 'submitted') return
-    chat.sendMessage({ text: content })
+  function sendMessage(content: string, files?: FileUIPart[]) {
+    if (chat.status === 'streaming' || chat.status === 'submitted') return
+    if (!content.trim() && (!files || files.length === 0)) return
+
+    if (files && files.length > 0) {
+      chat.sendMessage({ text: content, files })
+    }
+    else {
+      chat.sendMessage({ text: content })
+    }
   }
 
   /**

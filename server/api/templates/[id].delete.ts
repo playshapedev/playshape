@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
-import { templates } from '~~/server/database/schema'
+import { templates, chatAttachments } from '~~/server/database/schema'
+import { deleteAttachmentFile } from '~~/server/utils/attachmentStorage'
 
 export default defineEventHandler((event) => {
   const id = getRouterParam(event, 'id')
@@ -14,6 +15,13 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 404, statusMessage: 'Template not found' })
   }
 
+  // Get all chat attachments for this template and delete their files
+  const attachments = db.select().from(chatAttachments).where(eq(chatAttachments.templateId, id)).all()
+  for (const attachment of attachments) {
+    deleteAttachmentFile(attachment.storagePath)
+  }
+
+  // Delete the database records (cascade will delete chat_attachments)
   db.delete(templates).where(eq(templates.id, id)).run()
 
   return { ok: true }

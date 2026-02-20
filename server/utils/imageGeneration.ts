@@ -2,6 +2,7 @@ import { eq, and } from 'drizzle-orm'
 import { generateImage as aiGenerateImage } from 'ai'
 import { createFireworks } from '@ai-sdk/fireworks'
 import { createOpenAI } from '@ai-sdk/openai'
+import OpenAI, { toFile } from 'openai'
 import Replicate from 'replicate'
 import { fal } from '@fal-ai/client'
 import { aiProviders, aiModels, type AIProviderType } from '../database/schema'
@@ -13,12 +14,35 @@ export interface ImageGenerationResult {
   height?: number
 }
 
+export interface ReferenceImage {
+  buffer: Buffer
+  mimeType: string
+}
+
+export interface ImageGenerationOptions {
+  aspectRatio?: string
+  /** Optional reference image for image-to-image generation */
+  referenceImage?: ReferenceImage
+}
+
 interface ImageModelConfig {
   providerType: AIProviderType
   modelId: string
   apiKey: string | null
   baseUrl?: string | null
 }
+
+/** Supported aspect ratios with user-friendly labels */
+export const ASPECT_RATIOS = [
+  { value: '1:1', label: 'Square', description: '1:1' },
+  { value: '16:9', label: 'Landscape', description: '16:9' },
+  { value: '9:16', label: 'Portrait', description: '9:16' },
+  { value: '21:9', label: 'Wide', description: '21:9' },
+  { value: '4:3', label: 'Classic', description: '4:3' },
+  { value: '3:4', label: 'Photo Portrait', description: '3:4' },
+] as const
+
+export const DEFAULT_ASPECT_RATIO = '1:1'
 
 /**
  * Get the active image model configuration.
@@ -92,20 +116,25 @@ export function getImageModelConfig(modelId: string): ImageModelConfig | null {
 
 /**
  * Generate an image using the specified model configuration.
+ * Optionally accepts a reference image for image-to-image generation.
  */
 export async function generateImage(
   prompt: string,
   config: ImageModelConfig,
+  options: ImageGenerationOptions = {},
 ): Promise<ImageGenerationResult> {
+  const aspectRatio = options.aspectRatio || DEFAULT_ASPECT_RATIO
+  const referenceImage = options.referenceImage
+
   switch (config.providerType) {
     case 'fireworks':
-      return generateWithFireworks(prompt, config)
+      return generateWithFireworks(prompt, config, aspectRatio, referenceImage)
     case 'replicate':
-      return generateWithReplicate(prompt, config)
+      return generateWithReplicate(prompt, config, aspectRatio, referenceImage)
     case 'fal':
-      return generateWithFal(prompt, config)
+      return generateWithFal(prompt, config, aspectRatio, referenceImage)
     case 'openai':
-      return generateWithOpenAI(prompt, config)
+      return generateWithOpenAI(prompt, config, aspectRatio, referenceImage)
     default:
       throw createError({
         statusCode: 400,
@@ -120,11 +149,27 @@ export async function generateImage(
 async function generateWithFireworks(
   prompt: string,
   config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage?: ReferenceImage,
 ): Promise<ImageGenerationResult> {
   if (!config.apiKey) {
     throw createError({ statusCode: 400, statusMessage: 'Fireworks API key is required' })
   }
 
+  // Check if this is a FLUX Kontext model that supports image input
+  const isKontextModel = config.modelId.includes('kontext')
+
+  // If reference image provided but model doesn't support it, warn and proceed
+  if (referenceImage && !isKontextModel) {
+    console.warn(`[ImageGeneration] Model ${config.modelId} does not support image-to-image. Generating from prompt only.`)
+  }
+
+  // For Kontext models with reference image, use the Fireworks API directly
+  if (referenceImage && isKontextModel) {
+    return generateWithFireworksKontext(prompt, config, aspectRatio, referenceImage)
+  }
+
+  // Standard text-to-image generation
   const fireworks = createFireworks({ apiKey: config.apiKey })
   const model = fireworks.image(config.modelId)
 
@@ -132,6 +177,7 @@ async function generateWithFireworks(
     model,
     prompt,
     n: 1,
+    aspectRatio: aspectRatio as `${number}:${number}`,
   })
 
   if (!images.length || !images[0]) {
@@ -152,11 +198,65 @@ async function generateWithFireworks(
   }
 }
 
+/**
+ * Fireworks FLUX Kontext image-to-image generation.
+ * Uses the Fireworks API with image input for editing/style transfer.
+ */
+async function generateWithFireworksKontext(
+  prompt: string,
+  config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage: ReferenceImage,
+): Promise<ImageGenerationResult> {
+  // Convert image to base64 data URL
+  const base64 = referenceImage.buffer.toString('base64')
+  const dataUrl = `data:${referenceImage.mimeType};base64,${base64}`
+
+  // Call Fireworks API directly for Kontext models
+  const response = await fetch('https://api.fireworks.ai/inference/v1/workflows/accounts/fireworks/models/' + config.modelId + '/text_to_image', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      prompt,
+      aspect_ratio: aspectRatio,
+      image_url: dataUrl,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: response.statusText }))
+    throw createError({
+      statusCode: response.status,
+      statusMessage: error.error || `Fireworks Kontext failed: ${response.statusText}`,
+    })
+  }
+
+  const result = await response.json() as {
+    output?: { url?: string }
+    data?: Array<{ url?: string }>
+  }
+
+  const imageUrl = result.output?.url || result.data?.[0]?.url
+  if (!imageUrl) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'No image URL in Fireworks Kontext response',
+    })
+  }
+
+  return downloadImage(imageUrl)
+}
+
 // ─── Replicate ───────────────────────────────────────────────────────────────
 
 async function generateWithReplicate(
   prompt: string,
   config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage?: ReferenceImage,
 ): Promise<ImageGenerationResult> {
   if (!config.apiKey) {
     throw createError({ statusCode: 400, statusMessage: 'Replicate API key is required' })
@@ -164,10 +264,25 @@ async function generateWithReplicate(
 
   const replicate = new Replicate({ auth: config.apiKey })
 
+  // Build input object
+  const input: Record<string, unknown> = {
+    prompt,
+    aspect_ratio: aspectRatio,
+  }
+
+  // Add reference image if provided (for models that support it)
+  if (referenceImage) {
+    // Convert to data URL for Replicate
+    const base64 = referenceImage.buffer.toString('base64')
+    const dataUrl = `data:${referenceImage.mimeType};base64,${base64}`
+    // Different models use different parameter names
+    input.image = dataUrl
+    input.image_url = dataUrl
+    input.init_image = dataUrl
+  }
+
   // Run the model - Replicate uses owner/model format
-  const output = await replicate.run(config.modelId as `${string}/${string}`, {
-    input: { prompt },
-  })
+  const output = await replicate.run(config.modelId as `${string}/${string}`, { input })
 
   // Output can be a URL string, array of URLs, or object with URL
   let imageUrl: string | undefined
@@ -197,6 +312,8 @@ async function generateWithReplicate(
 async function generateWithFal(
   prompt: string,
   config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage?: ReferenceImage,
 ): Promise<ImageGenerationResult> {
   if (!config.apiKey) {
     throw createError({ statusCode: 400, statusMessage: 'fal.ai API key is required' })
@@ -205,10 +322,24 @@ async function generateWithFal(
   // Configure fal client
   fal.config({ credentials: config.apiKey })
 
+  // Build input object
+  const input: Record<string, unknown> = {
+    prompt,
+    aspect_ratio: aspectRatio,
+  }
+
+  // Add reference image if provided (for models that support it)
+  if (referenceImage) {
+    // Convert to data URL for fal.ai
+    const base64 = referenceImage.buffer.toString('base64')
+    const dataUrl = `data:${referenceImage.mimeType};base64,${base64}`
+    // fal.ai typically uses image_url parameter
+    input.image_url = dataUrl
+    input.image = dataUrl
+  }
+
   // Run the model
-  const result = await fal.subscribe(config.modelId, {
-    input: { prompt },
-  }) as {
+  const result = await fal.subscribe(config.modelId, { input }) as {
     data: {
       images?: Array<{ url: string; width?: number; height?: number }>
     }
@@ -230,17 +361,106 @@ async function generateWithFal(
   }
 }
 
-// ─── OpenAI (DALL-E) ─────────────────────────────────────────────────────────
+// ─── OpenAI (GPT Image / DALL-E) ─────────────────────────────────────────────
 // Uses AI SDK's generateImage for consistent interface
+// Note: OpenAI uses size instead of aspectRatio, so we map common ratios to sizes
+
+type OpenAIEditSize = '1024x1024' | '1024x1536' | '1536x1024' | '256x256' | '512x512'
+
+function aspectRatioToOpenAISize(aspectRatio: string, modelId: string): string {
+  // GPT Image models (gpt-image-1, gpt-image-1-mini) support: 1024x1024, 1024x1536, 1536x1024, auto
+  // DALL-E 3 supports: 1024x1024, 1024x1792, 1792x1024
+  // DALL-E 2 supports: 256x256, 512x512, 1024x1024
+  const isGptImage = modelId.startsWith('gpt-image')
+  const isDalle2 = modelId === 'dall-e-2'
+
+  if (isDalle2) {
+    // DALL-E 2 only supports square images
+    return '1024x1024'
+  }
+
+  if (isGptImage) {
+    switch (aspectRatio) {
+      case '9:16':
+      case '3:4':
+        return '1024x1536' // Portrait
+      case '16:9':
+      case '21:9':
+      case '4:3':
+        return '1536x1024' // Landscape
+      case '1:1':
+      default:
+        return '1024x1024' // Square
+    }
+  }
+
+  // DALL-E 3
+  switch (aspectRatio) {
+    case '9:16':
+    case '3:4':
+      return '1024x1792' // Portrait
+    case '16:9':
+    case '21:9':
+    case '4:3':
+      return '1792x1024' // Landscape
+    case '1:1':
+    default:
+      return '1024x1024' // Square
+  }
+}
+
+/** Get size for images.edit endpoint (subset of sizes) */
+function aspectRatioToOpenAIEditSize(aspectRatio: string, modelId: string): OpenAIEditSize {
+  const isGptImage = modelId.startsWith('gpt-image')
+  const isDalle2 = modelId === 'dall-e-2'
+
+  if (isDalle2) {
+    return '1024x1024'
+  }
+
+  if (isGptImage) {
+    switch (aspectRatio) {
+      case '9:16':
+      case '3:4':
+        return '1024x1536'
+      case '16:9':
+      case '21:9':
+      case '4:3':
+        return '1536x1024'
+      case '1:1':
+      default:
+        return '1024x1024'
+    }
+  }
+
+  // Fallback for any other model
+  return '1024x1024'
+}
 
 async function generateWithOpenAI(
   prompt: string,
   config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage?: ReferenceImage,
 ): Promise<ImageGenerationResult> {
   if (!config.apiKey) {
     throw createError({ statusCode: 400, statusMessage: 'OpenAI API key is required' })
   }
 
+  const openaiClient = new OpenAI({ apiKey: config.apiKey })
+
+  // If reference image provided, use images.edit
+  if (referenceImage) {
+    // DALL-E 3 doesn't support image editing
+    if (config.modelId === 'dall-e-3') {
+      console.warn(`[ImageGeneration] Model ${config.modelId} does not support image-to-image. Generating from prompt only.`)
+    }
+    else {
+      return generateWithOpenAIEdit(openaiClient, prompt, config, aspectRatio, referenceImage)
+    }
+  }
+
+  // Standard text-to-image generation via AI SDK
   const openai = createOpenAI({ apiKey: config.apiKey })
   const model = openai.image(config.modelId)
 
@@ -248,6 +468,7 @@ async function generateWithOpenAI(
     model,
     prompt,
     n: 1,
+    size: aspectRatioToOpenAISize(aspectRatio, config.modelId) as `${number}x${number}`,
   })
 
   if (!images.length || !images[0]) {
@@ -266,6 +487,53 @@ async function generateWithOpenAI(
     mimeType: image.mediaType || 'image/png',
     ...dimensions,
   }
+}
+
+/**
+ * OpenAI image edit using the official SDK.
+ * Supports GPT Image models (gpt-image-1, gpt-image-1-mini) and dall-e-2.
+ */
+async function generateWithOpenAIEdit(
+  client: OpenAI,
+  prompt: string,
+  config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage: ReferenceImage,
+): Promise<ImageGenerationResult> {
+  // Convert buffer to a File-like object for the SDK
+  const imageFile = await toFile(referenceImage.buffer, 'reference.png', {
+    type: referenceImage.mimeType,
+  })
+
+  const size = aspectRatioToOpenAIEditSize(aspectRatio, config.modelId)
+
+  const response = await client.images.edit({
+    model: config.modelId,
+    image: imageFile,
+    prompt,
+    size,
+  })
+
+  if (!response.data?.[0]?.b64_json && !response.data?.[0]?.url) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'No image data in OpenAI edit response',
+    })
+  }
+
+  // Handle base64 response
+  if (response.data[0].b64_json) {
+    const buffer = Buffer.from(response.data[0].b64_json, 'base64')
+    const dimensions = getImageDimensions(buffer)
+    return {
+      buffer,
+      mimeType: 'image/png',
+      ...dimensions,
+    }
+  }
+
+  // Handle URL response - download the image
+  return downloadImage(response.data[0].url!)
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

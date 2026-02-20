@@ -1,8 +1,14 @@
 import { z } from 'zod'
-import { setContentCleanupEnabled, getContentCleanupEnabled } from '../utils/settings'
+import {
+  setContentCleanupEnabled,
+  getContentCleanupEnabled,
+  setImageAspectRatio,
+  getImageAspectRatio,
+} from '../utils/settings'
 
 const settingsSchema = z.object({
   contentCleanupEnabled: z.boolean().optional(),
+  imageAspectRatio: z.string().optional(),
 })
 
 /**
@@ -17,8 +23,13 @@ export default defineEventHandler(async (event) => {
     setContentCleanupEnabled(parsed.contentCleanupEnabled)
   }
 
+  if (parsed.imageAspectRatio !== undefined) {
+    setImageAspectRatio(parsed.imageAspectRatio)
+  }
+
   // Return updated settings
   return {
     contentCleanupEnabled: getContentCleanupEnabled(),
+    imageAspectRatio: getImageAspectRatio(),
   }
 })

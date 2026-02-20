@@ -1,4 +1,4 @@
-import { getContentCleanupEnabled } from '../utils/settings'
+import { getContentCleanupEnabled, getImageAspectRatio } from '../utils/settings'
 
 /**
  * GET /api/settings
@@ -7,5 +7,6 @@ import { getContentCleanupEnabled } from '../utils/settings'
 export default defineEventHandler(() => {
   return {
     contentCleanupEnabled: getContentCleanupEnabled(),
+    imageAspectRatio: getImageAspectRatio(),
   }
 })

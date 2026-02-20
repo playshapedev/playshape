@@ -127,6 +127,13 @@
       "when": 1771311803891,
       "tag": "0017_add_asset_images_table",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1771348139351,
+      "tag": "0018_add_chat_attachments_table",
+      "breakpoints": true
     }
   ]
 }
