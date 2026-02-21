@@ -22,6 +22,8 @@ async function handleCreate() {
     newTemplateName.value = ''
     newTemplateDescription.value = ''
     toast.add({ title: 'Template created', color: 'success' })
+    // Clear the templates list cache so it shows the new template when navigating back
+    await clearNuxtData(getTemplatesKey('activity'))
     // Navigate to the editor immediately
     await router.push(`/templates/${template.id}`)
   }

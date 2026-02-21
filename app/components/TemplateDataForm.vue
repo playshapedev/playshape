@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { ImageFieldValue, VideoFieldValue } from '~~/server/database/schema'
+
 interface InputField {
   id: string
   type: string
@@ -17,6 +19,8 @@ const props = defineProps<{
   modelValue: Record<string, unknown>
   /** Nesting depth for visual indentation (used internally for recursion) */
   depth?: number
+  /** Project ID for scoping asset selection */
+  projectId?: string
 }>()
 
 const emit = defineEmits<{
@@ -51,7 +55,9 @@ function addArrayItem(field: InputField) {
       : sub.type === 'number' ? 0
         : sub.type === 'color' ? '#000000'
           : sub.type === 'array' ? []
-            : ''
+            : sub.type === 'image' ? null
+              : sub.type === 'video' ? null
+                : ''
   }
   items.push(blank)
   updateField(field.id, items)
@@ -286,6 +292,22 @@ function itemSummary(field: InputField, item: Record<string, unknown>, index: nu
             @update:model-value="updateField(field.id, $event)"
           />
         </div>
+
+        <!-- Image -->
+        <ImageFieldInput
+          v-else-if="field.type === 'image'"
+          :model-value="(modelValue[field.id] as ImageFieldValue | null)"
+          :project-id="projectId"
+          @update:model-value="updateField(field.id, $event)"
+        />
+
+        <!-- Video -->
+        <VideoFieldInput
+          v-else-if="field.type === 'video'"
+          :model-value="(modelValue[field.id] as VideoFieldValue | null)"
+          :project-id="projectId"
+          @update:model-value="updateField(field.id, $event)"
+        />
 
         <!-- Fallback: text input -->
         <UInput

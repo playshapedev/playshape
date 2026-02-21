@@ -28,6 +28,8 @@ async function handleDelete() {
   try {
     await deleteActivity(projectId, courseId, activity.value.id)
     toast.add({ title: 'Activity deleted', color: 'success' })
+    // Clear the course cache so the list refreshes when we navigate back
+    await clearNuxtData(getCourseKey(projectId, courseId))
     await router.push(`/projects/${projectId}/courses/${courseId}`)
   }
   catch (e: unknown) {

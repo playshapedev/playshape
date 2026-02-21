@@ -253,7 +253,7 @@ export interface TemplateDependency {
 
 export interface TemplateField {
   id: string
-  type: 'text' | 'textarea' | 'dropdown' | 'checkbox' | 'number' | 'color' | 'array'
+  type: 'text' | 'textarea' | 'dropdown' | 'checkbox' | 'number' | 'color' | 'array' | 'image' | 'video'
   label: string
   required?: boolean
   placeholder?: string
@@ -262,6 +262,20 @@ export interface TemplateField {
   min?: number // for number
   max?: number // for number
   fields?: TemplateField[] // sub-fields for array type
+}
+
+// Value structure stored in activity.data for image fields
+export interface ImageFieldValue {
+  assetId: string
+  imageId: string
+}
+
+// Value structure stored in activity.data for video fields
+export interface VideoFieldValue {
+  source: 'youtube' | 'vimeo' | 'upload'
+  url: string // embed URL for youtube/vimeo, file URL for uploads
+  assetId?: string // only for uploads
+  videoId?: string // only for uploads
 }
 
 export interface TemplateMessage {
@@ -301,7 +315,7 @@ export const brands = sqliteTable('brands', {
 // and the relative path to the file.
 
 /** Canonical list of asset types. Add new types here as they are supported. */
-export const ASSET_TYPES = ['image', 'audio'] as const
+export const ASSET_TYPES = ['image', 'video', 'audio'] as const
 export type AssetType = (typeof ASSET_TYPES)[number]
 
 export const assets = sqliteTable('assets', {
@@ -323,6 +337,22 @@ export const assetImages = sqliteTable('asset_images', {
   mimeType: text('mime_type'),
   width: integer('width'),
   height: integer('height'),
+  fileSize: integer('file_size'), // bytes
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// Individual videos within an asset (uploaded or external URLs)
+export const assetVideos = sqliteTable('asset_videos', {
+  id: text('id').primaryKey(),
+  assetId: text('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  source: text('source').$type<'youtube' | 'vimeo' | 'upload'>().notNull(),
+  url: text('url'), // YouTube/Vimeo URL or null for uploads
+  storagePath: text('storage_path'), // relative path for uploaded videos
+  thumbnailPath: text('thumbnail_path'), // extracted or fetched thumbnail
+  mimeType: text('mime_type'), // for uploads
+  width: integer('width'),
+  height: integer('height'),
+  duration: integer('duration'), // seconds
   fileSize: integer('file_size'), // bytes
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })

@@ -111,6 +111,11 @@ export function mimeTypeToExtension(mimeType: string): string {
     'audio/mpeg': '.mp3',
     'audio/wav': '.wav',
     'audio/ogg': '.ogg',
+    'video/mp4': '.mp4',
+    'video/webm': '.webm',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/x-matroska': '.mkv',
   }
   return mimeMap[mimeType] || '.bin'
 }
@@ -129,8 +134,31 @@ export function extensionToMimeType(ext: string): string {
     '.mp3': 'audio/mpeg',
     '.wav': 'audio/wav',
     '.ogg': 'audio/ogg',
+    '.mp4': 'video/mp4',
+    '.webm': 'video/webm',
+    '.mov': 'video/quicktime',
+    '.avi': 'video/x-msvideo',
+    '.mkv': 'video/x-matroska',
   }
   return extMap[ext.toLowerCase()] || 'application/octet-stream'
+}
+
+/**
+ * Generate a storage filename for an asset video.
+ * @param videoId - The asset video's UUID
+ * @param mimeType - The MIME type (e.g., "video/mp4")
+ */
+export function generateAssetVideoFilename(videoId: string, mimeType: string): string {
+  const ext = mimeTypeToExtension(mimeType)
+  return `${videoId}${ext}`
+}
+
+/**
+ * Generate a thumbnail filename for an asset video.
+ * @param videoId - The asset video's UUID
+ */
+export function generateVideoThumbnailFilename(videoId: string): string {
+  return `${videoId}_thumb.jpg`
 }
 
 /**
@@ -149,4 +177,22 @@ export function getAssetUrl(assetId: string): string {
  */
 export function getAssetImageUrl(assetId: string, imageId: string): string {
   return `/api/assets/${assetId}/images/${imageId}/file`
+}
+
+/**
+ * Get the API URL for serving an asset video file.
+ * @param assetId - The parent asset's UUID
+ * @param videoId - The asset video's UUID
+ */
+export function getAssetVideoUrl(assetId: string, videoId: string): string {
+  return `/api/assets/${assetId}/videos/${videoId}/file`
+}
+
+/**
+ * Get the API URL for serving an asset video thumbnail.
+ * @param assetId - The parent asset's UUID
+ * @param videoId - The asset video's UUID
+ */
+export function getAssetVideoThumbnailUrl(assetId: string, videoId: string): string {
+  return `/api/assets/${assetId}/videos/${videoId}/thumbnail`
 }

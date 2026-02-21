@@ -81,16 +81,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Handle JSON body (create empty asset for generation)
+  // Handle JSON body (create empty asset for generation or video)
   const body = await readBody<{
     name?: string
     projectId?: string
+    type?: 'image' | 'video'
   }>(event)
+
+  const assetType = body.type || 'image'
 
   const asset = {
     id: assetId,
     projectId: body.projectId || null,
-    type: 'image' as const,
+    type: assetType,
     name: body.name || 'Untitled',
     messages: [],
     createdAt: now,
@@ -103,6 +106,8 @@ export default defineEventHandler(async (event) => {
     ...asset,
     images: [],
     imageCount: 0,
+    videos: [],
+    videoCount: 0,
   }
 })
 

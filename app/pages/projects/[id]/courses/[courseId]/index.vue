@@ -268,7 +268,8 @@ async function handleAddActivity() {
       templateId: newActivityTemplateId.value,
     })
     showAddActivityModal.value = false
-    await refresh()
+    // Clear the course cache so the list shows the new activity when navigating back
+    await clearNuxtData(getCourseKey(projectId, courseId))
     // Navigate directly to the activity editor
     await router.push(`/projects/${projectId}/courses/${courseId}/activities/${activity.id}`)
   }

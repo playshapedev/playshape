@@ -7,7 +7,7 @@ import { z } from 'zod'
  * which many OpenAI-compatible providers reject in tool definitions.
  */
 
-export const fieldTypeEnum = z.enum(['text', 'textarea', 'dropdown', 'checkbox', 'number', 'color', 'array'])
+export const fieldTypeEnum = z.enum(['text', 'textarea', 'dropdown', 'checkbox', 'number', 'color', 'array', 'image', 'video'])
 
 export const baseFieldProps = {
   id: z.string().describe('Unique field identifier (camelCase)'),

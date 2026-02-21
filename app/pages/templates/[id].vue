@@ -25,9 +25,11 @@ async function handleDelete() {
   if (!template.value) return
   deleting.value = true
   try {
+    const kind = template.value.kind
     await deleteTemplate(template.value.id)
     toast.add({ title: 'Template deleted', color: 'success' })
-    await clearNuxtData((key) => typeof key === 'string' && key.startsWith('/api/templates'))
+    // Clear the templates list cache so it refreshes when we navigate back
+    await clearNuxtData(getTemplatesKey(kind))
     await router.push('/templates')
   }
   catch (e: unknown) {

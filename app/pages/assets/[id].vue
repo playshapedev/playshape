@@ -9,6 +9,9 @@ const { setTitle } = useNavbar()
 const assetId = route.params.id as string
 const { asset, pending, error, refresh } = useAsset(assetId)
 
+// Check if this is a video asset
+const isVideo = computed(() => asset.value?.type === 'video')
+
 // Set dynamic navbar title from asset name
 watch(() => asset.value?.name, (name) => {
   if (name) setTitle(name)
@@ -147,25 +150,27 @@ function onResizeStart(e: PointerEvent) {
   </div>
 
   <div v-else-if="asset" ref="containerRef" class="h-full flex overflow-hidden">
-    <!-- Chat Panel -->
-    <div
-      class="h-full border-r border-default overflow-hidden flex-shrink-0"
-      :style="{ width: chatWidthPct + '%' }"
-    >
-      <AssetChat
-        :key="chatKey"
-        :asset-id="assetId"
-        :initial-messages="initialMessages"
-        @update="refresh"
-      />
-    </div>
+    <!-- Chat Panel (only for image assets) -->
+    <template v-if="!isVideo">
+      <div
+        class="h-full border-r border-default overflow-hidden flex-shrink-0"
+        :style="{ width: chatWidthPct + '%' }"
+      >
+        <AssetChat
+          :key="chatKey"
+          :asset-id="assetId"
+          :initial-messages="initialMessages"
+          @update="refresh"
+        />
+      </div>
 
-    <!-- Resize Handle -->
-    <div
-      class="w-1 h-full cursor-col-resize bg-transparent hover:bg-primary/20 transition-colors flex-shrink-0"
-      :class="{ 'bg-primary/30': isDragging }"
-      @pointerdown="onResizeStart"
-    />
+      <!-- Resize Handle -->
+      <div
+        class="w-1 h-full cursor-col-resize bg-transparent hover:bg-primary/20 transition-colors flex-shrink-0"
+        :class="{ 'bg-primary/30': isDragging }"
+        @pointerdown="onResizeStart"
+      />
+    </template>
 
     <!-- Preview Panel -->
     <div class="flex-1 h-full overflow-hidden">

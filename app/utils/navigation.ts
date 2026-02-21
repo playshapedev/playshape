@@ -45,10 +45,10 @@ export const navigation: NavItem[] = [
         path: '/projects/:id',
         title: 'Project',
         tabs: [
-          { path: '', label: 'Overview', icon: 'i-lucide-layout-dashboard' },
           { path: 'courses', label: 'Courses', icon: 'i-lucide-book-open' },
           { path: 'libraries', label: 'Libraries', icon: 'i-lucide-library-big' },
           { path: 'skills', label: 'Skills', icon: 'i-lucide-target' },
+          { path: 'settings', label: 'Settings', icon: 'i-lucide-settings' },
         ],
       },
     ],

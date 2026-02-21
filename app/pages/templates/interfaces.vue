@@ -22,6 +22,8 @@ async function handleCreate() {
     newTemplateName.value = ''
     newTemplateDescription.value = ''
     toast.add({ title: 'Interface created', color: 'success' })
+    // Clear the templates list cache so it shows the new interface when navigating back
+    await clearNuxtData(getTemplatesKey('interface'))
     await router.push(`/templates/${template.id}`)
   }
   catch (e: unknown) {

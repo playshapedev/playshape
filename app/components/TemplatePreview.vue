@@ -192,8 +192,51 @@ ${dependencyScriptTags.value}
   <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader@0.9.5/dist/vue3-sfc-loader.js"><\/script>
 ${toolHeadHtml.value}
   <script>
-    // ── CourseAPI (Preview Adapter) ──────────────────────────
+    // ── CourseAPI (Preview Adapter) ──────────────────────────────
     ${COURSE_API_PREVIEW_SCRIPT}
+
+    // ── Media Field Helpers ──────────────────────────────────────
+    // These helpers allow LLM-generated components to easily work with
+    // image and video field values from the template input schema.
+
+    /**
+     * Get the URL for an image field value.
+     * @param {Object} imageValue - The image field value { assetId, imageId }
+     * @returns {string|null} The image URL, or null if invalid
+     */
+    window.getImageUrl = function(imageValue) {
+      if (!imageValue || !imageValue.assetId || !imageValue.imageId) return null;
+      return '/api/assets/' + imageValue.assetId + '/images/' + imageValue.imageId + '/file';
+    };
+
+    /**
+     * Get video information for a video field value.
+     * @param {Object} videoValue - The video field value { source, url, assetId?, videoId? }
+     * @returns {Object|null} Video info { isEmbed, embedUrl, videoUrl, thumbnailUrl }, or null if invalid
+     */
+    window.getVideoInfo = function(videoValue) {
+      if (!videoValue || !videoValue.source) return null;
+
+      var isEmbed = videoValue.source === 'youtube' || videoValue.source === 'vimeo';
+
+      if (isEmbed) {
+        return {
+          isEmbed: true,
+          embedUrl: videoValue.url,
+          videoUrl: null,
+          thumbnailUrl: null
+        };
+      }
+
+      // Uploaded video
+      if (!videoValue.assetId || !videoValue.videoId) return null;
+      return {
+        isEmbed: false,
+        embedUrl: null,
+        videoUrl: '/api/assets/' + videoValue.assetId + '/videos/' + videoValue.videoId + '/file',
+        thumbnailUrl: '/api/assets/' + videoValue.assetId + '/videos/' + videoValue.videoId + '/thumbnail'
+      };
+    };
   <\/script>
   <style>
     body { margin: 0; padding: 0; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }

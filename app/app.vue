@@ -91,5 +91,8 @@ onUnmounted(() => {
         <NuxtPage />
       </NuxtLayout>
     </template>
+
+    <!-- Global background task notifications -->
+    <BackgroundTaskPanel />
   </UApp>
 </template>

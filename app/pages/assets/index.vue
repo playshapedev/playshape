@@ -4,40 +4,63 @@ const toast = useToast()
 
 const { assets, pending, refresh } = useAssets()
 
-// ─── Create Image ────────────────────────────────────────────────────────────
+// Background task integration for video uploads and image generation
+const { addTask, startTask, updateTask, completeTask, failTask, getTask } = useBackgroundTasks()
 
-const creating = ref(false)
+// ─── Generate Image ──────────────────────────────────────────────────────────
 
-async function handleCreateImage() {
-  creating.value = true
-  try {
-    const asset = await createAsset({ name: 'New Image' })
-    await router.push(`/assets/${asset.id}`)
+const generateModalOpen = ref(false)
+const generatePrompt = ref('')
+const generateName = ref('')
+const isGenerating = ref(false)
+const generatingTaskId = ref<string | null>(null)
+
+// Watch for generation task completion
+watch(() => generatingTaskId.value ? getTask(generatingTaskId.value) : null, (task) => {
+  if (!task) return
+
+  if (task.status === 'completed' && task.result) {
+    const result = task.result as { assetId: string }
+    isGenerating.value = false
+    generatingTaskId.value = null
+    generateModalOpen.value = false
+    generatePrompt.value = ''
+    generateName.value = ''
+    // Navigate to the new asset
+    router.push(`/assets/${result.assetId}`)
   }
-  catch (error) {
-    toast.add({ title: 'Failed to create image', color: 'error' })
-    console.error(error)
+  else if (task.status === 'failed') {
+    isGenerating.value = false
+    generatingTaskId.value = null
+    toast.add({ title: 'Generation failed', description: task.error, color: 'error' })
   }
-  finally {
-    creating.value = false
-  }
+}, { deep: true })
+
+function handleGenerateImage() {
+  if (!generatePrompt.value.trim()) return
+
+  isGenerating.value = true
+  generatingTaskId.value = generateImageInBackground({
+    prompt: generatePrompt.value.trim(),
+    name: generateName.value.trim() || undefined,
+  })
 }
 
-// ─── Upload ──────────────────────────────────────────────────────────────────
+// ─── Image Upload ────────────────────────────────────────────────────────────
 
-const fileInputRef = ref<HTMLInputElement | null>(null)
-const uploading = ref(false)
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const uploadingImages = ref(false)
 
-function openFileDialog() {
-  fileInputRef.value?.click()
+function openImageDialog() {
+  imageInputRef.value?.click()
 }
 
-async function handleFileSelect(event: Event) {
+async function handleImageSelect(event: Event) {
   const input = event.target as HTMLInputElement
   const files = input.files
   if (!files?.length) return
 
-  uploading.value = true
+  uploadingImages.value = true
   try {
     for (const file of files) {
       await uploadAsset(file)
@@ -53,8 +76,109 @@ async function handleFileSelect(event: Event) {
     console.error(error)
   }
   finally {
-    uploading.value = false
-    input.value = '' // Reset for next upload
+    uploadingImages.value = false
+    input.value = ''
+  }
+}
+
+// ─── Video Upload ────────────────────────────────────────────────────────────
+
+const videoInputRef = ref<HTMLInputElement | null>(null)
+
+function openVideoDialog() {
+  videoInputRef.value?.click()
+}
+
+async function handleVideoSelect(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = input.files
+  if (!files?.length) return
+
+  // Process each video file
+  for (const file of files) {
+    // Validate file type
+    const allowedTypes = ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-msvideo', 'video/x-matroska']
+    if (!allowedTypes.includes(file.type)) {
+      toast.add({
+        title: 'Unsupported format',
+        description: `${file.name} is not a supported video format`,
+        color: 'error',
+      })
+      continue
+    }
+
+    // Create background task for this upload
+    const taskId = addTask({
+      type: 'video-upload',
+      title: `Uploading ${file.name}`,
+      description: 'Processing video...',
+    })
+    startTask(taskId)
+
+    // Process in background (don't await)
+    processVideoUpload(file, taskId)
+  }
+
+  input.value = ''
+}
+
+async function processVideoUpload(file: File, taskId: string) {
+  try {
+    // Create video asset
+    const asset = await createVideoAsset({ name: file.name.replace(/\.[^/.]+$/, '') })
+    updateTask(taskId, { progress: 10, description: 'Uploading video file...' })
+
+    // Upload video to asset
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const videoResponse = await $fetch<{ id: string }>(`/api/assets/${asset.id}/videos`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    updateTask(taskId, { progress: 90, description: 'Finalizing...' })
+
+    completeTask(taskId, {
+      assetId: asset.id,
+      videoId: videoResponse.id,
+    })
+
+    // Refresh assets list
+    await refresh()
+  }
+  catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Upload failed'
+    failTask(taskId, errorMessage)
+  }
+}
+
+// ─── Video URL ───────────────────────────────────────────────────────────────
+
+const videoUrlModalOpen = ref(false)
+const videoUrl = ref('')
+const videoUrlError = ref('')
+const addingVideoUrl = ref(false)
+
+async function handleAddVideoUrl() {
+  if (!videoUrl.value.trim()) return
+
+  videoUrlError.value = ''
+  addingVideoUrl.value = true
+
+  try {
+    await createVideoFromUrl(videoUrl.value.trim())
+    toast.add({ title: 'Video added', color: 'success' })
+    videoUrlModalOpen.value = false
+    videoUrl.value = ''
+    await refresh()
+  }
+  catch (error: unknown) {
+    const err = error as { data?: { statusMessage?: string }, message?: string }
+    videoUrlError.value = err.data?.statusMessage || err.message || 'Invalid video URL'
+  }
+  finally {
+    addingVideoUrl.value = false
   }
 }
 
@@ -93,36 +217,54 @@ async function handleDelete() {
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <p class="text-muted">
-        Upload images or generate them with AI.
+        Upload images and videos, or generate images with AI.
       </p>
       <div class="flex items-center gap-2">
-        <UButton
-          icon="i-lucide-upload"
-          variant="soft"
-          color="neutral"
-          :loading="uploading"
-          @click="openFileDialog"
+        <!-- Upload dropdown -->
+        <UDropdownMenu
+          :items="[
+            [
+              { label: 'Upload Images', icon: 'i-lucide-image', onSelect: openImageDialog },
+              { label: 'Upload Videos', icon: 'i-lucide-video', onSelect: openVideoDialog },
+              { label: 'Add YouTube/Vimeo', icon: 'i-lucide-link', onSelect: () => videoUrlModalOpen = true },
+            ],
+          ]"
         >
-          Upload
-        </UButton>
+          <UButton
+            icon="i-lucide-upload"
+            variant="soft"
+            color="neutral"
+            trailing-icon="i-lucide-chevron-down"
+            :loading="uploadingImages"
+          >
+            Upload
+          </UButton>
+        </UDropdownMenu>
         <UButton
           icon="i-lucide-sparkles"
-          :loading="creating"
-          @click="handleCreateImage"
+          @click="generateModalOpen = true"
         >
-          Create Image
+          Generate Image
         </UButton>
       </div>
     </div>
 
-    <!-- Hidden file input -->
+    <!-- Hidden file inputs -->
     <input
-      ref="fileInputRef"
+      ref="imageInputRef"
       type="file"
       accept="image/*"
       multiple
       class="hidden"
-      @change="handleFileSelect"
+      @change="handleImageSelect"
+    >
+    <input
+      ref="videoInputRef"
+      type="file"
+      accept="video/mp4,video/webm,video/quicktime,video/x-msvideo,video/x-matroska"
+      multiple
+      class="hidden"
+      @change="handleVideoSelect"
     >
 
     <!-- Empty state -->
@@ -130,22 +272,32 @@ async function handleDelete() {
       v-if="!pending && !assets?.length"
       icon="i-lucide-image"
       title="No assets yet"
-      description="Upload images or create them with AI."
+      description="Upload images and videos, or create images with AI."
     >
       <div class="flex items-center gap-2">
-        <UButton
-          icon="i-lucide-upload"
-          variant="soft"
-          color="neutral"
-          @click="openFileDialog"
+        <UDropdownMenu
+          :items="[
+            [
+              { label: 'Upload Images', icon: 'i-lucide-image', onSelect: openImageDialog },
+              { label: 'Upload Videos', icon: 'i-lucide-video', onSelect: openVideoDialog },
+              { label: 'Add YouTube/Vimeo', icon: 'i-lucide-link', onSelect: () => videoUrlModalOpen = true },
+            ],
+          ]"
         >
-          Upload
-        </UButton>
+          <UButton
+            icon="i-lucide-upload"
+            variant="soft"
+            color="neutral"
+            trailing-icon="i-lucide-chevron-down"
+          >
+            Upload
+          </UButton>
+        </UDropdownMenu>
         <UButton
           icon="i-lucide-sparkles"
-          @click="handleCreateImage"
+          @click="generateModalOpen = true"
         >
-          Create Image
+          Generate Image
         </UButton>
       </div>
     </EmptyState>
@@ -165,6 +317,128 @@ async function handleDelete() {
         />
       </div>
     </div>
+
+    <!-- Video URL Modal -->
+    <UModal v-model:open="videoUrlModalOpen">
+      <template #content>
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-highlighted">Add Video from URL</h3>
+              <UButton
+                icon="i-lucide-x"
+                variant="ghost"
+                color="neutral"
+                size="sm"
+                @click="videoUrlModalOpen = false"
+              />
+            </div>
+          </template>
+
+          <div class="space-y-4">
+            <UFormField label="Video URL">
+              <UInput
+                v-model="videoUrl"
+                placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
+                :disabled="addingVideoUrl"
+                @keyup.enter="handleAddVideoUrl"
+              />
+            </UFormField>
+            <p v-if="videoUrlError" class="text-sm text-error flex items-center gap-1.5">
+              <UIcon name="i-lucide-alert-circle" class="size-4" />
+              {{ videoUrlError }}
+            </p>
+            <p class="text-xs text-dimmed">
+              Paste a YouTube or Vimeo video URL to add it to your assets.
+            </p>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton
+                variant="ghost"
+                color="neutral"
+                @click="videoUrlModalOpen = false"
+              >
+                Cancel
+              </UButton>
+              <UButton
+                :loading="addingVideoUrl"
+                :disabled="!videoUrl.trim()"
+                @click="handleAddVideoUrl"
+              >
+                Add Video
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
+
+    <!-- Generate Image Modal -->
+    <UModal v-model:open="generateModalOpen">
+      <template #content>
+        <UCard>
+          <template #header>
+            <div class="flex items-center justify-between">
+              <h3 class="text-lg font-semibold text-highlighted">Generate Image</h3>
+              <UButton
+                icon="i-lucide-x"
+                variant="ghost"
+                color="neutral"
+                size="sm"
+                :disabled="isGenerating"
+                @click="generateModalOpen = false"
+              />
+            </div>
+          </template>
+
+          <div class="space-y-4">
+            <UFormField label="Prompt" required>
+              <UTextarea
+                v-model="generatePrompt"
+                placeholder="Describe the image you want to generate..."
+                :rows="4"
+                :disabled="isGenerating"
+                autofocus
+              />
+            </UFormField>
+            <UFormField label="Name" hint="Optional">
+              <UInput
+                v-model="generateName"
+                placeholder="Give your image a name"
+                :disabled="isGenerating"
+              />
+            </UFormField>
+            <p v-if="isGenerating" class="text-sm text-muted flex items-center gap-2">
+              <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
+              Generating image in background...
+            </p>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton
+                variant="ghost"
+                color="neutral"
+                :disabled="isGenerating"
+                @click="generateModalOpen = false"
+              >
+                Cancel
+              </UButton>
+              <UButton
+                icon="i-lucide-sparkles"
+                :loading="isGenerating"
+                :disabled="!generatePrompt.trim() || isGenerating"
+                @click="handleGenerateImage"
+              >
+                Generate
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </template>
+    </UModal>
 
     <!-- Delete confirmation -->
     <ConfirmModal

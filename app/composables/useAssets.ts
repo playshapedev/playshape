@@ -1,12 +1,27 @@
-import type { assets, assetImages } from '~~/server/database/schema'
+import type { assets, assetImages, assetVideos } from '~~/server/database/schema'
 
 export type Asset = typeof assets.$inferSelect
 export type AssetImage = typeof assetImages.$inferSelect
+export type AssetVideo = typeof assetVideos.$inferSelect
 
 /** Asset with its images included */
 export interface AssetWithImages extends Asset {
   images: AssetImage[]
   imageCount: number
+}
+
+/** Asset with its videos included */
+export interface AssetWithVideos extends Asset {
+  videos: AssetVideo[]
+  videoCount: number
+}
+
+/** Asset with both images and videos */
+export interface AssetWithMedia extends Asset {
+  images: AssetImage[]
+  imageCount: number
+  videos: AssetVideo[]
+  videoCount: number
 }
 
 /**
@@ -23,10 +38,10 @@ export function useAssets(projectId?: string) {
 }
 
 /**
- * Get a single asset by ID with its images.
+ * Get a single asset by ID with its images and videos.
  */
 export function useAsset(id: string) {
-  const { data, pending, error, refresh } = useFetch<AssetWithImages>(`/api/assets/${id}`)
+  const { data, pending, error, refresh } = useFetch<AssetWithMedia>(`/api/assets/${id}`)
 
   return { asset: data, pending, error, refresh }
 }
@@ -96,4 +111,69 @@ export function getAssetFileUrl(id: string) {
  */
 export function getAssetImageUrl(assetId: string, imageId: string) {
   return `/api/assets/${assetId}/images/${imageId}/file`
+}
+
+/**
+ * Get the URL for an asset video file.
+ */
+export function getAssetVideoUrl(assetId: string, videoId: string) {
+  return `/api/assets/${assetId}/videos/${videoId}/file`
+}
+
+/**
+ * Get the URL for an asset video thumbnail.
+ */
+export function getAssetVideoThumbnailUrl(assetId: string, videoId: string) {
+  return `/api/assets/${assetId}/videos/${videoId}/thumbnail`
+}
+
+/**
+ * Create a new video asset (empty, for adding videos).
+ */
+export async function createVideoAsset(data: {
+  name?: string
+  projectId?: string
+} = {}) {
+  return $fetch<Asset>('/api/assets', {
+    method: 'POST',
+    body: { ...data, type: 'video' },
+  })
+}
+
+/**
+ * Upload a video file to an existing video asset.
+ * Returns the created video record.
+ */
+export async function uploadVideoToAsset(assetId: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  return $fetch<AssetVideo>(`/api/assets/${assetId}/videos`, {
+    method: 'POST',
+    body: formData,
+  })
+}
+
+/**
+ * Create a video asset from a YouTube or Vimeo URL.
+ */
+export async function createVideoFromUrl(url: string, options: {
+  name?: string
+  projectId?: string
+} = {}) {
+  return $fetch<{
+    id: string
+    videoId: string
+    type: 'video'
+    name: string
+    video: {
+      id: string
+      source: 'youtube' | 'vimeo'
+      url: string
+      thumbnailUrl: string
+    }
+  }>('/api/assets/videos/url', {
+    method: 'POST',
+    body: { url, ...options },
+  })
 }

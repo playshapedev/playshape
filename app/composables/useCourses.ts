@@ -1,4 +1,4 @@
-import type { courses, courseSections, activities, templates, TemplateField, TemplateDependency } from '~~/server/database/schema'
+import type { courses, courseSections, activities, TemplateField, TemplateDependency } from '~~/server/database/schema'
 
 type Course = typeof courses.$inferSelect
 type CourseSection = typeof courseSections.$inferSelect
@@ -57,11 +57,18 @@ export function useProjectCourses(projectId: MaybeRef<string>) {
 
 // ─── Single course with sections ─────────────────────────────────────────────
 
+/** Generate the cache key for a course's data */
+export function getCourseKey(projectId: string, courseId: string) {
+  return `course:${projectId}:${courseId}`
+}
+
 export function useCourse(projectId: MaybeRef<string>, courseId: MaybeRef<string>) {
   const resolvedProjectId = toRef(projectId)
   const resolvedCourseId = toRef(courseId)
+  const key = getCourseKey(toValue(projectId), toValue(courseId))
   const { data, pending, error, refresh } = useFetch<CourseDetail>(
     () => `/api/projects/${resolvedProjectId.value}/courses/${resolvedCourseId.value}`,
+    { key },
   )
   return { course: data, pending, error, refresh }
 }

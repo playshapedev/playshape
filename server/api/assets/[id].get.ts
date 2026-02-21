@@ -1,8 +1,8 @@
 import { eq, desc } from 'drizzle-orm'
-import { assets, assetImages } from '~~/server/database/schema'
+import { assets, assetImages, assetVideos } from '~~/server/database/schema'
 
 /**
- * Get a single asset by ID with its images.
+ * Get a single asset by ID with its images and videos.
  * GET /api/assets/:id
  */
 export default defineEventHandler(async (event) => {
@@ -26,9 +26,19 @@ export default defineEventHandler(async (event) => {
     .orderBy(desc(assetImages.createdAt))
     .all()
 
+  // Get all videos for this asset
+  const videos = db
+    .select()
+    .from(assetVideos)
+    .where(eq(assetVideos.assetId, id))
+    .orderBy(desc(assetVideos.createdAt))
+    .all()
+
   return {
     ...asset,
     images,
     imageCount: images.length,
+    videos,
+    videoCount: videos.length,
   }
 })

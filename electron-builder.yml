@@ -73,3 +73,6 @@ linux:
     - AppImage
     - deb
   artifactName: ${productName}-${version}-linux-${arch}.${ext}
+
+# Post-pack hook to bundle ffmpeg binary for video processing
+afterPack: scripts/copy-ffmpeg.js
