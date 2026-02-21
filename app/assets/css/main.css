@@ -258,37 +258,33 @@ html.electron .sidebar-overlay {
 
 /*
  * ── Chat Prose ────────────────────────────────────────────────────────────────
- * Compact typography for MDC-rendered markdown inside chat message bubbles.
- * Scoped to .chat-prose so it doesn't affect prose elsewhere in the app.
+ * Terminal-style typography for MDC-rendered markdown in chat messages.
+ * Parent uses font-mono, so these styles are tuned for monospace context.
  */
 .chat-prose { line-height: 1.5; }
 
 .chat-prose h1,
 .chat-prose h2,
 .chat-prose h3,
-.chat-prose h4 { color: var(--color-playshape-700); }
-.dark .chat-prose h1,
-.dark .chat-prose h2,
-.dark .chat-prose h3,
-.dark .chat-prose h4 { color: var(--color-playshape-300); }
+.chat-prose h4 { font-weight: 600; line-height: 1.5; }
 
-.chat-prose h1 { font-size: 1.1em; margin: 0.5em 0 0.25em; }
-.chat-prose h2 { font-size: 1em; margin: 0.5em 0 0.25em; }
-.chat-prose h3 { font-size: 0.95em; margin: 0.4em 0 0.2em; }
-.chat-prose h4 { font-size: 0.9em; margin: 0.4em 0 0.2em; }
+.chat-prose h1 { font-size: 1.1em; margin: 0.5em 0 0.4em; }
+.chat-prose h2 { font-size: 1em; margin: 0.5em 0 0.4em; }
+.chat-prose h3 { font-size: 0.95em; margin: 0.4em 0 0.3em; }
+.chat-prose h4 { font-size: 0.9em; margin: 0.4em 0 0.3em; }
 
-.chat-prose p { margin: 0.3em 0; }
+.chat-prose p { margin: 0 0 0.5em; line-height: 1.5; }
 
 .chat-prose ul,
-.chat-prose ol { margin: 0.25em 0; padding-left: 1.25em; }
-.chat-prose li { margin: 0.1em 0; }
+.chat-prose ol { margin: 0 0 0.5em; padding-left: 2em; line-height: 1.5; }
+.chat-prose li { margin: 0 0 0.25em; line-height: 1.5; }
 .chat-prose ul { list-style-type: disc; }
 .chat-prose ol { list-style-type: decimal; }
 
-.chat-prose pre { margin: 0.4em 0; padding: 0.5em 0.75em; border-radius: 0.325rem; overflow-x: auto; font-size: 0.85em; background: var(--ui-bg-accented); }
-.chat-prose code:not(pre code) { font-size: 0.85em; padding: 0.1em 0.3em; border-radius: 0.2rem; background: var(--ui-bg-accented); }
+.chat-prose pre { margin: 0 0 0.5em; padding: 0.5em 0.75em; border-radius: 0.25rem; overflow-x: auto; background: var(--ui-bg-accented); }
+.chat-prose code:not(pre code) { padding: 0.1em 0.25em; border-radius: 0.15rem; background: var(--ui-bg-accented); }
 
-.chat-prose blockquote { margin: 0.4em 0; padding-left: 0.75em; border-left: 2px solid var(--ui-border-accented); color: var(--ui-text-muted); }
+.chat-prose blockquote { margin: 0 0 0.5em; padding-left: 0.75em; border-left: 2px solid var(--ui-border-accented); color: var(--ui-text-muted); }
 
 .chat-prose hr { margin: 0.5em 0; border-color: var(--ui-border); }
 

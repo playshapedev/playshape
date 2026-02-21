@@ -518,9 +518,9 @@ onUnmounted(() => {
     <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden">
       <!-- Inner wrapper: min-h-full + justify-end pushes messages to the bottom
            when content is shorter than the viewport (like mainstream chat UIs) -->
-      <div ref="innerWrapperRef" class="relative min-h-full flex flex-col justify-end p-4 space-y-4">
+      <div ref="innerWrapperRef" class="relative min-h-full flex flex-col justify-end p-3 space-y-3">
         <!-- Empty state -->
-        <div v-if="!chat.messages.length && chat.status === 'ready'" class="flex-1 flex flex-col items-center justify-center text-center">
+        <div v-if="!chat.messages.length && chat.status === 'ready'" class="flex-1 flex flex-col items-center justify-center text-center font-mono">
           <UIcon name="i-lucide-image" class="size-8 text-muted mb-2" />
           <p class="text-sm text-muted">
             Describe the image you want to create.
@@ -529,23 +529,12 @@ onUnmounted(() => {
 
         <!-- Message list -->
         <div v-for="msg in chat.messages" :key="msg.id" :data-message-id="msg.id">
-        <div
-          class="flex gap-2"
-          :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
-        >
-          <!-- Avatar -->
-          <div v-if="msg.role === 'assistant'" class="shrink-0">
-            <div class="size-7 rounded-full bg-primary/10 flex items-center justify-center">
-              <UIcon name="i-lucide-sparkles" class="size-4 text-primary" />
-            </div>
-          </div>
-
-          <!-- Content -->
+          <!-- Terminal-style message: mono font, user messages have left border + subtle bg -->
           <div
-            class="max-w-[85%] min-w-0 rounded-lg px-3 py-2 text-sm break-words"
+            class="font-mono text-sm min-w-0 break-words overflow-hidden py-1.5"
             :class="msg.role === 'user'
-              ? 'bg-primary text-white'
-              : 'bg-elevated'"
+              ? 'pl-3 border-l-2 border-primary bg-primary/5'
+              : ''"
           >
             <template v-for="(part, i) in msg.parts" :key="`${msg.id}-${part.type}-${i}`">
               <!-- Text -->
@@ -600,10 +589,9 @@ onUnmounted(() => {
             </template>
           </div>
         </div>
-      </div>
 
       <!-- Loading indicator -->
-      <div v-if="chat.status === 'submitted'" class="flex items-center gap-2 text-sm text-muted">
+      <div v-if="chat.status === 'submitted'" class="flex items-center gap-2 font-mono text-sm text-muted">
         <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
         <span>Thinking...</span>
       </div>
