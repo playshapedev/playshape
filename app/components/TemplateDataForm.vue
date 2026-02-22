@@ -243,12 +243,11 @@ function itemSummary(field: InputField, item: Record<string, unknown>, index: nu
           @update:model-value="updateField(field.id, $event)"
         />
 
-        <!-- Textarea -->
-        <UTextarea
+        <!-- Textarea (rich text) -->
+        <RichtextEditor
           v-else-if="field.type === 'textarea'"
           :model-value="String(modelValue[field.id] ?? '')"
           :placeholder="field.placeholder"
-          :rows="4"
           @update:model-value="updateField(field.id, $event)"
         />
 
