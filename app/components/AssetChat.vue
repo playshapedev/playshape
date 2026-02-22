@@ -2,6 +2,8 @@
 import type { UIMessage, FileUIPart } from 'ai'
 import type { AIProviderType } from '~/composables/useAIProviders'
 import type { TokenUsageMetadata } from '~/composables/useAssetChat'
+import type { ChatMode } from '~/utils/chatMode'
+import { getInitialChatMode } from '~/utils/chatMode'
 import { ASPECT_RATIOS, DEFAULT_ASPECT_RATIO } from '~/utils/aspectRatios'
 
 const props = defineProps<{
@@ -154,6 +156,17 @@ const selectedAspectRatioLabel = computed(() => {
   return ratio ? ratio.label : 'Square'
 })
 
+// ─── Chat Mode (Plan / Build) ────────────────────────────────────────────────
+// New chats default to Plan mode to encourage planning first.
+// Existing chats default to Build mode to not disrupt ongoing work.
+// Mode is toggled via Tab key when the input is focused.
+
+const mode = ref<ChatMode>(getInitialChatMode(props.initialMessages.length > 0))
+
+function toggleMode() {
+  mode.value = mode.value === 'build' ? 'plan' : 'build'
+}
+
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
 const { chat, sendMessage, stopGeneration, onAssetUpdate, tokenUsage } = useAssetChat(
@@ -161,6 +174,7 @@ const { chat, sendMessage, stopGeneration, onAssetUpdate, tokenUsage } = useAsse
   props.initialMessages,
   selectedModelId,
   selectedAspectRatio,
+  mode,
 )
 
 onAssetUpdate.value = () => emit('update')
@@ -777,7 +791,12 @@ onUnmounted(() => {
       </div>
 
       <!-- Input row -->
-      <div class="flex items-end gap-2 pl-3 border-l-2 border-primary bg-primary/5 rounded-r-lg">
+      <div
+        class="flex items-end gap-2 pl-3 border-l-2 rounded-r-lg transition-colors"
+        :class="mode === 'plan'
+          ? 'border-warning bg-warning/5'
+          : 'border-primary bg-primary/5'"
+      >
         <!-- Hidden file input -->
         <input
           ref="fileInputRef"
@@ -811,6 +830,7 @@ onUnmounted(() => {
           :disabled="isRunning || isUploading"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="stopGeneration()"
+          @keydown.tab.prevent="toggleMode"
         />
         <div class="flex items-end py-1 pr-1">
           <UButton
@@ -830,12 +850,23 @@ onUnmounted(() => {
           />
         </div>
       </div>
-      <p v-if="!imageModels.length" class="text-xs text-muted">
-        Enable an image model in Settings > AI Providers to generate images.
-      </p>
-      <p v-else class="text-xs text-muted">
-        Paste or attach images to include as reference.
-      </p>
+      <!-- Mode toggle and hints -->
+      <div class="flex items-center justify-between gap-4 text-xs text-muted">
+        <button
+          type="button"
+          class="font-medium hover:text-default transition-colors"
+          :class="mode === 'plan' ? 'text-warning' : 'text-primary'"
+          @click="toggleMode"
+        >
+          {{ mode === 'plan' ? 'Plan' : 'Build' }}
+        </button>
+        <span v-if="!imageModels.length">
+          Enable an image model in Settings > AI Providers to generate images.
+        </span>
+        <span v-else>
+          Paste or attach images to include as reference.
+        </span>
+      </div>
     </div>
   </div>
 </template>

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { ChatMode } from '~/utils/chatMode'
+import { getInitialChatMode } from '~/utils/chatMode'
+
 definePageMeta({ noPadding: true })
 
 const route = useRoute()
@@ -147,6 +150,19 @@ watch(() => activity.value?.messages, (messages) => {
   }
 }, { immediate: true })
 
+// ─── Chat Mode (Plan / Build) ────────────────────────────────────────────────
+// New chats default to Plan mode to encourage planning first.
+// Existing chats default to Build mode to not disrupt ongoing work.
+
+const mode = ref<ChatMode>('plan') // Will be set properly once messages are loaded
+
+// Set mode based on initial messages once they're available
+watch(initialChatMessages, (messages) => {
+  if (messages) {
+    mode.value = getInitialChatMode(messages.length > 0)
+  }
+}, { immediate: true })
+
 // ─── Activity Chat Instance ──────────────────────────────────────────────────
 // Created once when activity data loads. Must not re-create on every reactive update.
 
@@ -162,6 +178,7 @@ watchEffect(() => {
       courseId,
       activityId,
       initialChatMessages.value,
+      mode,
     )
     // Wire up the update callback so we refresh activity data after AI updates
     instance.onActivityUpdate.value = () => onActivityUpdated()
@@ -430,6 +447,7 @@ watch(formData, () => {
         ref="templateChatRef"
         :initial-messages="initialChatMessages"
         :chat-instance="externalChatInstance"
+        :external-mode="mode"
         :tool-indicators="activityToolIndicators"
         :update-tool-types="['tool-update_activity']"
         placeholder="Describe the activity content..."

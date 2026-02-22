@@ -1,6 +1,7 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
+import type { ChatMode } from '~/utils/chatMode'
 
 /** Token usage metadata sent from the server */
 export interface TokenUsageMetadata {
@@ -17,11 +18,17 @@ export interface TokenUsageMetadata {
  *
  * Uses @ai-sdk/vue's Chat class which handles the SSE stream parsing,
  * message state, and tool call lifecycle automatically.
+ *
+ * @param libraryId - The library ID
+ * @param documentId - The document ID to chat about
+ * @param initialMessages - Initial messages to hydrate the chat
+ * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
  */
 export function useDocumentChat(
   libraryId: string,
   documentId: string,
   initialMessages: UIMessage[] = [],
+  mode?: Ref<ChatMode>,
 ) {
   const onDocumentUpdate = ref<(() => void) | null>(null)
 
@@ -35,6 +42,7 @@ export function useDocumentChat(
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `/api/libraries/${libraryId}/documents/${documentId}/chat`,
+      body: () => ({ mode: mode?.value }),
     }),
     onFinish: async ({ message }) => {
       // Check if any assistant message in this response updated the document

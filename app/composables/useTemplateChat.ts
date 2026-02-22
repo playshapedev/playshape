@@ -1,6 +1,7 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage, FileUIPart } from 'ai'
+import type { ChatMode } from '~/utils/chatMode'
 
 /** Token usage metadata sent from the server */
 export interface TokenUsageMetadata {
@@ -21,8 +22,16 @@ export interface TokenUsageMetadata {
  * Tool call rendering (ask_question buttons, update_template indicators)
  * is handled directly in the template by iterating over message.parts —
  * no separate pendingQuestion state needed.
+ *
+ * @param templateId - The template ID to chat about
+ * @param initialMessages - Initial messages to hydrate the chat
+ * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
  */
-export function useTemplateChat(templateId: string, initialMessages: UIMessage[] = []) {
+export function useTemplateChat(
+  templateId: string,
+  initialMessages: UIMessage[] = [],
+  mode?: Ref<ChatMode>,
+) {
   const onTemplateUpdate = ref<(() => void) | null>(null)
 
   // Track whether the last AI response included an update_template tool call.
@@ -36,6 +45,7 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `/api/templates/${templateId}/chat`,
+      body: () => ({ mode: mode?.value }),
     }),
     onFinish: async ({ message }) => {
       // Check if any assistant message in this response used update_template

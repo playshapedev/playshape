@@ -1,18 +1,26 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
+import type { ChatMode } from '~/utils/chatMode'
 
 /**
  * Creates a Chat instance for an activity's AI conversation.
  *
  * Similar to useTemplateChat but for populating activity data fields.
  * The chat helps fill in template fields using library content.
+ *
+ * @param projectId - The project ID
+ * @param courseId - The course ID
+ * @param activityId - The activity ID to chat about
+ * @param initialMessages - Initial messages to hydrate the chat
+ * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
  */
 export function useActivityChat(
   projectId: string,
   courseId: string,
   activityId: string,
   initialMessages: UIMessage[] = [],
+  mode?: Ref<ChatMode>,
 ) {
   const onActivityUpdate = ref<(() => void) | null>(null)
 
@@ -23,6 +31,7 @@ export function useActivityChat(
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `/api/projects/${projectId}/courses/${courseId}/activities/${activityId}/chat`,
+      body: () => ({ mode: mode?.value }),
     }),
     onFinish: async () => {
       // Check if any assistant message in this response used update_activity

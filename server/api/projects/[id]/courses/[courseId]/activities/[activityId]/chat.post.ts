@@ -8,6 +8,7 @@ import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage } from '~~/server/utils/tokens'
 import { checkHtmlInSampleData } from '~~/server/utils/templateValidation'
+import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -20,6 +21,7 @@ export default defineLazyEventHandler(() => {
 
     const body = await readBody(event)
     const messages: UIMessage[] = body?.messages
+    const mode: ChatMode = body?.mode ?? 'build'
 
     if (!messages || !Array.isArray(messages)) {
       throw createError({
@@ -66,7 +68,12 @@ export default defineLazyEventHandler(() => {
     }
 
     // Load system prompt
-    const systemPrompt = await useActivityEditorPrompt()
+    const baseSystemPrompt = await useActivityEditorPrompt()
+
+    // Append plan mode instruction when in plan mode
+    const systemPrompt = mode === 'plan'
+      ? `${baseSystemPrompt}\n\n${PLAN_MODE_INSTRUCTION}`
+      : baseSystemPrompt
 
     let model
     let provider: { id: string } | null = null
@@ -91,18 +98,14 @@ export default defineLazyEventHandler(() => {
       .all()
     const libraryIds = linkedLibraries.map(l => l.libraryId)
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: compaction.messages,
-      stopWhen: stepCountIs(5),
-      tools: {
-        ask_question: askQuestionTool,
+    // ─── Read-only tools (available in both Plan and Build modes) ────────────
+    const readOnlyTools = {
+      ask_question: askQuestionTool,
 
-        get_template: tool({
-          description: 'Retrieve the activity template\'s input schema (field definitions), the activity\'s current data, and the component source. Call this to understand what fields need to be filled in. ALWAYS call this before making updates.',
-          inputSchema: z.object({}),
-          execute: async () => {
+      get_template: tool({
+        description: 'Retrieve the activity template\'s input schema (field definitions), the activity\'s current data, and the component source. Call this to understand what fields need to be filled in. ALWAYS call this before making updates.',
+        inputSchema: z.object({}),
+        execute: async () => {
             // Re-fetch to get latest state
             const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
             const currentTmpl = db.select().from(templates).where(eq(templates.id, activity.templateId)).get()
@@ -185,71 +188,6 @@ export default defineLazyEventHandler(() => {
           },
         }),
 
-        update_activity: tool({
-          description: 'Update the activity\'s data fields. Provide a data object with field values matching the template\'s input schema. Fields you include will replace existing values. You can also update the activity name and description. You MUST call get_template first to read the current state.',
-          inputSchema: z.object({
-            data: z.record(z.string(), z.unknown()).optional().describe('Activity data fields. Keys must match the field IDs from the template\'s input schema.'),
-            name: z.string().optional().describe('Updated activity name'),
-            description: z.string().optional().describe('Updated activity description'),
-          }),
-          execute: async ({ data: newData, name, description }) => {
-            const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
-            if (!current) return { success: false, error: 'Activity not found' }
-
-            // Check for stale context (only if there was a previous modification)
-            if (current.dataLastModifiedAt) {
-              const lastMod = current.dataLastModifiedAt.getTime()
-              const lastRead = current.dataLastReadAt?.getTime() ?? 0
-
-              if (lastMod > lastRead) {
-                return {
-                  success: false,
-                  error: `Activity data has been modified since it was last read.\n`
-                    + `Last modification: ${current.dataLastModifiedAt.toISOString()}\n`
-                    + `Last read: ${current.dataLastReadAt?.toISOString() ?? 'never'}\n\n`
-                    + `Please call get_template to read the current state before making changes.`,
-                }
-              }
-            }
-
-            const updatePayload: Record<string, unknown> = {
-              updatedAt: new Date(),
-              dataLastModifiedAt: new Date(),
-              dataLastReadAt: null, // Force re-read before next modification
-            }
-
-            if (newData) {
-              // Merge new data with existing data
-              const merged = { ...(current.data as Record<string, unknown> ?? {}), ...newData }
-              updatePayload.data = merged
-            }
-            if (name) updatePayload.name = name
-            if (description !== undefined) updatePayload.description = description
-
-            db.update(activities)
-              .set(updatePayload)
-              .where(eq(activities.id, activityId))
-              .run()
-
-            // Check for HTML in text/textarea fields (non-blocking warnings)
-            const currentTmpl = db.select().from(templates).where(eq(templates.id, current.templateId)).get()
-            if (currentTmpl?.inputSchema) {
-              const mergedData = newData
-                ? { ...(current.data as Record<string, unknown> ?? {}), ...newData }
-                : current.data as Record<string, unknown> ?? {}
-              const warnings = checkHtmlInSampleData(
-                currentTmpl.inputSchema as TemplateField[],
-                mergedData,
-              )
-              if (warnings.length > 0) {
-                return { success: true, warnings: warnings.map(w => w.message) }
-              }
-            }
-
-            return { success: true }
-          },
-        }),
-
         search_libraries: tool({
           description: 'Search across all reference libraries linked to this project. Returns the most relevant content chunks ranked by semantic similarity. Use this to find accurate content for populating activity fields.',
           inputSchema: z.object({
@@ -324,7 +262,87 @@ export default defineLazyEventHandler(() => {
             }
           },
         }),
-      },
+      }
+
+    // ─── Write tools (only available in Build mode) ──────────────────────────
+    const writeTools = {
+      update_activity: tool({
+          description: 'Update the activity\'s data fields. Provide a data object with field values matching the template\'s input schema. Fields you include will replace existing values. You can also update the activity name and description. You MUST call get_template first to read the current state.',
+          inputSchema: z.object({
+            data: z.record(z.string(), z.unknown()).optional().describe('Activity data fields. Keys must match the field IDs from the template\'s input schema.'),
+            name: z.string().optional().describe('Updated activity name'),
+            description: z.string().optional().describe('Updated activity description'),
+          }),
+          execute: async ({ data: newData, name, description }) => {
+            const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
+            if (!current) return { success: false, error: 'Activity not found' }
+
+            // Check for stale context (only if there was a previous modification)
+            if (current.dataLastModifiedAt) {
+              const lastMod = current.dataLastModifiedAt.getTime()
+              const lastRead = current.dataLastReadAt?.getTime() ?? 0
+
+              if (lastMod > lastRead) {
+                return {
+                  success: false,
+                  error: `Activity data has been modified since it was last read.\n`
+                    + `Last modification: ${current.dataLastModifiedAt.toISOString()}\n`
+                    + `Last read: ${current.dataLastReadAt?.toISOString() ?? 'never'}\n\n`
+                    + `Please call get_template to read the current state before making changes.`,
+                }
+              }
+            }
+
+            const updatePayload: Record<string, unknown> = {
+              updatedAt: new Date(),
+              dataLastModifiedAt: new Date(),
+              dataLastReadAt: null, // Force re-read before next modification
+            }
+
+            if (newData) {
+              // Merge new data with existing data
+              const merged = { ...(current.data as Record<string, unknown> ?? {}), ...newData }
+              updatePayload.data = merged
+            }
+            if (name) updatePayload.name = name
+            if (description !== undefined) updatePayload.description = description
+
+            db.update(activities)
+              .set(updatePayload)
+              .where(eq(activities.id, activityId))
+              .run()
+
+            // Check for HTML in text/textarea fields (non-blocking warnings)
+            const currentTmpl = db.select().from(templates).where(eq(templates.id, current.templateId)).get()
+            if (currentTmpl?.inputSchema) {
+              const mergedData = newData
+                ? { ...(current.data as Record<string, unknown> ?? {}), ...newData }
+                : current.data as Record<string, unknown> ?? {}
+              const warnings = checkHtmlInSampleData(
+                currentTmpl.inputSchema as TemplateField[],
+                mergedData,
+              )
+              if (warnings.length > 0) {
+                return { success: true, warnings: warnings.map(w => w.message) }
+              }
+            }
+
+            return { success: true }
+          },
+        }),
+      }
+
+    // Select tools based on mode
+    const tools = mode === 'plan'
+      ? readOnlyTools
+      : { ...readOnlyTools, ...writeTools }
+
+    const result = streamText({
+      model,
+      system: systemPrompt,
+      messages: compaction.messages,
+      stopWhen: stepCountIs(5),
+      tools,
       maxOutputTokens: 16384,
       onFinish: async ({ totalUsage }) => {
         // Record token usage to database

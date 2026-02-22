@@ -2,6 +2,8 @@
 import type { UIMessage, FileUIPart } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
 import type { TokenUsageMetadata } from '~/composables/useTemplateChat'
+import type { ChatMode } from '~/utils/chatMode'
+import { getInitialChatMode } from '~/utils/chatMode'
 
 /**
  * Tool indicator configuration: maps tool part types to their display info.
@@ -32,6 +34,8 @@ const props = withDefaults(defineProps<{
     stopGeneration: () => Promise<void>
     reportPreviewError: (error: string) => void
   }
+  /** External mode ref — when provided, used instead of internal mode */
+  externalMode?: Ref<ChatMode>
   /** Tool part types that indicate an "update" action (triggers the 'update' emit) */
   updateToolTypes?: string[]
   /** Tool indicator config — maps tool part type (e.g. 'tool-update_template') to display config */
@@ -43,6 +47,7 @@ const props = withDefaults(defineProps<{
 }>(), {
   templateId: undefined,
   chatInstance: undefined,
+  externalMode: undefined,
   updateToolTypes: () => ['tool-update_template', 'tool-patch_component'],
   toolIndicators: () => ({
     'tool-update_template': {
@@ -110,10 +115,22 @@ const emit = defineEmits<{
   update: []
 }>()
 
+// ─── Chat Mode (Plan / Build) ────────────────────────────────────────────────
+// New chats default to Plan mode to encourage planning first.
+// Existing chats default to Build mode to not disrupt ongoing work.
+// Mode is toggled via Tab key when the input is focused.
+
+const internalMode = ref<ChatMode>(getInitialChatMode(props.initialMessages.length > 0))
+const mode = props.externalMode ?? internalMode
+
+function toggleMode() {
+  mode.value = mode.value === 'build' ? 'plan' : 'build'
+}
+
 // Support both internal (template) and external (activity) chat instances
 const templateChat = props.chatInstance
   ? null
-  : useTemplateChat(props.templateId!, props.initialMessages)
+  : useTemplateChat(props.templateId!, props.initialMessages, mode)
 
 const chat: Chat<UIMessage> = props.chatInstance ? props.chatInstance.chat : templateChat!.chat
 const sendMessage: (content: string, files?: FileUIPart[]) => void = props.chatInstance ? props.chatInstance.sendMessage : templateChat!.sendMessage
@@ -820,7 +837,12 @@ watch(() => visibleMessages.value.length, (count) => {
       </div>
 
       <!-- Input row -->
-      <div class="flex items-end gap-2 pl-3 border-l-2 border-primary bg-primary/5 rounded-r-lg">
+      <div
+        class="flex items-end gap-2 pl-3 border-l-2 rounded-r-lg transition-colors"
+        :class="mode === 'plan'
+          ? 'border-warning bg-warning/5'
+          : 'border-primary bg-primary/5'"
+      >
         <!-- Hidden file input -->
         <input
           ref="fileInputRef"
@@ -854,6 +876,7 @@ watch(() => visibleMessages.value.length, (count) => {
           :disabled="isRunning || isUploading"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="stopGeneration()"
+          @keydown.tab.prevent="toggleMode"
         />
         <div class="flex items-end py-1 pr-1">
           <!-- Stop button while running -->
@@ -875,9 +898,18 @@ watch(() => visibleMessages.value.length, (count) => {
           />
         </div>
       </div>
-      <p class="text-xs text-muted">
-        Paste or attach images to include as reference.
-      </p>
+      <!-- Mode toggle and hints -->
+      <div class="flex items-center justify-between gap-4 text-xs text-muted">
+        <button
+          type="button"
+          class="font-medium hover:text-default transition-colors"
+          :class="mode === 'plan' ? 'text-warning' : 'text-primary'"
+          @click="toggleMode"
+        >
+          {{ mode === 'plan' ? 'Plan' : 'Build' }}
+        </button>
+        <span>Paste or attach images to include as reference.</span>
+      </div>
     </div>
   </div>
 </template>

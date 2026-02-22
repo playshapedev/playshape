@@ -9,6 +9,7 @@ import { readAttachmentFile } from '~~/server/utils/attachmentStorage'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage } from '~~/server/utils/tokens'
+import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
 const SYSTEM_PROMPT = `You are an AI assistant helping users create and edit images. Your role is to:
 
@@ -49,6 +50,7 @@ export default defineLazyEventHandler(() => {
     const messages: UIMessage[] = body?.messages
     const modelId: string | undefined = body?.modelId // Optional: specific model to use
     const aspectRatio: string = body?.aspectRatio || DEFAULT_ASPECT_RATIO // Aspect ratio for generation
+    const mode: ChatMode = body?.mode ?? 'build'
 
     if (!messages || !Array.isArray(messages)) {
       throw createError({
@@ -103,18 +105,18 @@ export default defineLazyEventHandler(() => {
       })
     }
 
-    // Apply context compaction if needed
-    const compaction = await compactContext(messages, SYSTEM_PROMPT, model)
+    // Apply plan mode instruction when in plan mode
+    const systemPrompt = mode === 'plan'
+      ? `${SYSTEM_PROMPT}\n\n${PLAN_MODE_INSTRUCTION}`
+      : SYSTEM_PROMPT
 
-    const result = streamText({
-      model,
-      system: SYSTEM_PROMPT,
-      messages: compaction.messages,
-      stopWhen: stepCountIs(3),
-      maxOutputTokens: 2048,
-      tools: {
-        ask_question: askQuestionTool,
-        get_asset: tool({
+    // Apply context compaction if needed
+    const compaction = await compactContext(messages, systemPrompt, model)
+
+    // ─── Read-only tools (available in both Plan and Build modes) ────────────
+    const readOnlyTools = {
+      ask_question: askQuestionTool,
+      get_asset: tool({
           description: 'Get the current asset details including name, generated images, and user-uploaded attachments. Use this to find image IDs for use with generate_image\'s referenceImageId parameter.',
           inputSchema: z.object({}),
           execute: async () => {
@@ -192,8 +194,11 @@ export default defineLazyEventHandler(() => {
             }
           },
         }),
+      }
 
-        generate_image: tool({
+    // ─── Write tools (only available in Build mode) ──────────────────────────
+    const writeTools = {
+      generate_image: tool({
           description: 'Generate a new image from a text prompt and add it to this asset. Use detailed, descriptive prompts for best results. Each generation creates a new image in the history. Optionally use a reference image for image-to-image generation (style transfer, editing, variations).',
           inputSchema: z.object({
             prompt: z.string().describe('Detailed description of the image to generate. Include style, mood, composition, lighting, and other relevant details.'),
@@ -286,7 +291,20 @@ export default defineLazyEventHandler(() => {
             }
           },
         }),
-      },
+      }
+
+    // Select tools based on mode
+    const tools = mode === 'plan'
+      ? readOnlyTools
+      : { ...readOnlyTools, ...writeTools }
+
+    const result = streamText({
+      model,
+      system: systemPrompt,
+      messages: compaction.messages,
+      stopWhen: stepCountIs(3),
+      maxOutputTokens: 2048,
+      tools,
       onFinish: async ({ totalUsage }) => {
         // Record token usage to database
         if (totalUsage) {

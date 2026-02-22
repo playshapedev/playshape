@@ -1,6 +1,7 @@
 import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage, FileUIPart } from 'ai'
+import type { ChatMode } from '~/utils/chatMode'
 
 /** Token usage metadata sent from the server */
 export interface TokenUsageMetadata {
@@ -17,12 +18,19 @@ export interface TokenUsageMetadata {
  *
  * Uses @ai-sdk/vue's Chat class which handles the SSE stream parsing,
  * message state, and tool call lifecycle automatically.
+ *
+ * @param assetId - The asset ID to chat about
+ * @param initialMessages - Initial messages to hydrate the chat
+ * @param modelId - Optional reactive ref to the model ID to use for generation
+ * @param aspectRatio - Optional reactive ref to the aspect ratio for generation
+ * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
  */
 export function useAssetChat(
   assetId: string,
   initialMessages: UIMessage[] = [],
   modelId?: Ref<string | undefined>,
   aspectRatio?: Ref<string | undefined>,
+  mode?: Ref<ChatMode>,
 ) {
   const onAssetUpdate = ref<(() => void) | null>(null)
 
@@ -39,6 +47,7 @@ export function useAssetChat(
       body: () => ({
         modelId: modelId?.value,
         aspectRatio: aspectRatio?.value,
+        mode: mode?.value,
       }),
     }),
     onFinish: async ({ message }) => {

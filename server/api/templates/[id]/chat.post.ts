@@ -13,6 +13,7 @@ import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSche
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage } from '~~/server/utils/tokens'
 import { validateTemplate } from '~~/server/utils/templateValidation'
+import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -23,6 +24,7 @@ export default defineLazyEventHandler(() => {
 
     const body = await readBody(event)
     const messages: UIMessage[] = body?.messages
+    const mode: ChatMode = body?.mode ?? 'build'
 
     if (!messages || !Array.isArray(messages)) {
       throw createError({
@@ -55,9 +57,14 @@ export default defineLazyEventHandler(() => {
 
     // Load system prompts (cached after first call)
     const prompts = await useSystemPrompts()
-    const systemPrompt = tmpl.kind === 'interface'
+    const baseSystemPrompt = tmpl.kind === 'interface'
       ? prompts.interface
       : prompts.activity
+
+    // Append plan mode instruction when in plan mode
+    const systemPrompt = mode === 'plan'
+      ? `${baseSystemPrompt}\n\n${PLAN_MODE_INSTRUCTION}`
+      : baseSystemPrompt
 
     let model
     let provider: { id: string } | null = null
@@ -79,49 +86,49 @@ export default defineLazyEventHandler(() => {
       ? 'Create or update the interface template with an input schema, Vue 3 component (must include <slot name="activity">), sample data, and optional CDN dependencies.'
       : 'Create or update the activity template with an input schema, Vue 3 component, sample data, optional CDN dependencies, and optional activity tools.'
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: compaction.messages,
-      stopWhen: stepCountIs(5),
-      tools: {
-        get_reference: getReferenceTool,
-        get_template: tool({
-          description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes. ALWAYS call this before making updates.',
-          inputSchema: z.object({}),
-          execute: async () => {
-            const current = db.select().from(templates).where(eq(templates.id, id)).get()
-            if (!current) return { error: 'Template not found' }
+    // ─── Read-only tools (available in both Plan and Build modes) ────────────
+    const readOnlyTools = {
+      get_reference: getReferenceTool,
+      get_template: tool({
+        description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes. ALWAYS call this before making updates.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          const current = db.select().from(templates).where(eq(templates.id, id)).get()
+          if (!current) return { error: 'Template not found' }
 
-            // Update last read timestamp for stale context detection
-            db.update(templates)
-              .set({ componentLastReadAt: new Date() })
-              .where(eq(templates.id, id))
-              .run()
+          // Update last read timestamp for stale context detection
+          db.update(templates)
+            .set({ componentLastReadAt: new Date() })
+            .where(eq(templates.id, id))
+            .run()
 
-            // Check for pending schema changes (from a previous update_template that detected breaking changes)
-            const pending = db
-              .select()
-              .from(templatePendingChanges)
-              .where(eq(templatePendingChanges.templateId, id))
-              .get()
+          // Check for pending schema changes (from a previous update_template that detected breaking changes)
+          const pending = db
+            .select()
+            .from(templatePendingChanges)
+            .where(eq(templatePendingChanges.templateId, id))
+            .get()
 
-            return {
-              name: current.name,
-              description: current.description,
-              inputSchema: current.inputSchema,
-              component: current.component,
-              sampleData: current.sampleData,
-              dependencies: current.dependencies,
-              tools: current.tools,
-              status: current.status,
-              schemaVersion: current.schemaVersion,
-              hasPendingChanges: !!pending,
-            }
-          },
-        }),
-        ask_question: askQuestionTool,
-        update_template: tool({
+          return {
+            name: current.name,
+            description: current.description,
+            inputSchema: current.inputSchema,
+            component: current.component,
+            sampleData: current.sampleData,
+            dependencies: current.dependencies,
+            tools: current.tools,
+            status: current.status,
+            schemaVersion: current.schemaVersion,
+            hasPendingChanges: !!pending,
+          }
+        },
+      }),
+      ask_question: askQuestionTool,
+    }
+
+    // ─── Write tools (only available in Build mode) ──────────────────────────
+    const writeTools = {
+      update_template: tool({
           description: updateTemplateDescription,
           inputSchema: z.object({
             fields: z.array(fieldSchema).describe('Array of input field definitions'),
@@ -829,7 +836,19 @@ export default defineLazyEventHandler(() => {
             }
           },
         }),
-      },
+      }
+
+    // Select tools based on mode
+    const tools = mode === 'plan'
+      ? readOnlyTools
+      : { ...readOnlyTools, ...writeTools }
+
+    const result = streamText({
+      model,
+      system: systemPrompt,
+      messages: compaction.messages,
+      stopWhen: stepCountIs(5),
+      tools,
       maxOutputTokens: 16384,
       onFinish: async ({ totalUsage }) => {
         // Record token usage to database

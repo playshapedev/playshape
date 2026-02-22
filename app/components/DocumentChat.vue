@@ -2,6 +2,8 @@
 import type { UIMessage } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
 import type { TokenUsageMetadata } from '~/composables/useDocumentChat'
+import type { ChatMode } from '~/utils/chatMode'
+import { getInitialChatMode } from '~/utils/chatMode'
 
 const props = defineProps<{
   libraryId: string
@@ -13,8 +15,19 @@ const emit = defineEmits<{
   update: []
 }>()
 
+// ─── Chat Mode (Plan / Build) ────────────────────────────────────────────────
+// New chats default to Plan mode to encourage planning first.
+// Existing chats default to Build mode to not disrupt ongoing work.
+// Mode is toggled via Tab key when the input is focused.
+
+const mode = ref<ChatMode>(getInitialChatMode(props.initialMessages.length > 0))
+
+function toggleMode() {
+  mode.value = mode.value === 'build' ? 'plan' : 'build'
+}
+
 // Wire up the update callback
-const documentChat = useDocumentChat(props.libraryId, props.documentId, props.initialMessages)
+const documentChat = useDocumentChat(props.libraryId, props.documentId, props.initialMessages, mode)
 documentChat.onDocumentUpdate.value = () => emit('update')
 
 // Use the chat from the composable
@@ -513,8 +526,13 @@ watch(() => chatInstance.messages.length, (count) => {
     </div>
 
     <!-- Text input (hidden when question is pending) -->
-    <div v-else class="border-t border-default p-3">
-      <div class="flex gap-2 pl-3 border-l-2 border-primary bg-primary/5 rounded-r-lg">
+    <div v-else class="border-t border-default p-3 space-y-2">
+      <div
+        class="flex gap-2 pl-3 border-l-2 rounded-r-lg transition-colors"
+        :class="mode === 'plan'
+          ? 'border-warning bg-warning/5'
+          : 'border-primary bg-primary/5'"
+      >
         <UTextarea
           ref="textareaRef"
           v-model="input"
@@ -526,6 +544,7 @@ watch(() => chatInstance.messages.length, (count) => {
           :disabled="isRunning"
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="stopGeneration()"
+          @keydown.tab.prevent="toggleMode"
         />
         <div class="flex items-end py-1 pr-1">
           <UButton
@@ -545,6 +564,15 @@ watch(() => chatInstance.messages.length, (count) => {
           />
         </div>
       </div>
+      <!-- Mode toggle -->
+      <button
+        type="button"
+        class="text-xs font-medium hover:text-default transition-colors"
+        :class="mode === 'plan' ? 'text-warning' : 'text-primary'"
+        @click="toggleMode"
+      >
+        {{ mode === 'plan' ? 'Plan' : 'Build' }}
+      </button>
     </div>
   </div>
 </template>

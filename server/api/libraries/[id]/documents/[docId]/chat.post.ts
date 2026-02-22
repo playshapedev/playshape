@@ -7,6 +7,7 @@ import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { fetchUrl } from '~~/server/utils/webFetch'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage } from '~~/server/utils/tokens'
+import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -19,6 +20,7 @@ export default defineLazyEventHandler(() => {
 
     const body = await readBody(event)
     const messages: UIMessage[] = body?.messages
+    const mode: ChatMode = body?.mode ?? 'build'
 
     if (!messages || !Array.isArray(messages)) {
       throw createError({
@@ -54,7 +56,12 @@ export default defineLazyEventHandler(() => {
     }
 
     // Load system prompt
-    const systemPrompt = await useDocumentGenerationPrompt()
+    const baseSystemPrompt = await useDocumentGenerationPrompt()
+
+    // Append plan mode instruction when in plan mode
+    const systemPrompt = mode === 'plan'
+      ? `${baseSystemPrompt}\n\n${PLAN_MODE_INSTRUCTION}`
+      : baseSystemPrompt
 
     let model
     let provider: { id: string } | null = null
@@ -71,55 +78,54 @@ export default defineLazyEventHandler(() => {
     // Apply context compaction if needed
     const compaction = await compactContext(messages, systemPrompt, model)
 
-    const result = streamText({
-      model,
-      system: systemPrompt,
-      messages: compaction.messages,
-      stopWhen: stepCountIs(5),
-      tools: {
-        ask_question: askQuestionTool,
+    // ─── Read-only tools (available in both Plan and Build modes) ────────────
+    const readOnlyTools = {
+      ask_question: askQuestionTool,
 
-        fetch_url: tool({
-          description: 'Fetch content from a URL. Use this to research topics by retrieving information from web pages. Returns the page title and main text content.',
-          inputSchema: z.object({
-            url: z.string().url().describe('The URL to fetch content from'),
-          }),
-          execute: async ({ url }) => {
-            const result = await fetchUrl(url)
-            if (!result.success) {
-              return { success: false, error: result.error }
-            }
-            return {
-              success: true,
-              url: result.url,
-              title: result.title,
-              content: result.content,
-            }
-          },
+      fetch_url: tool({
+        description: 'Fetch content from a URL. Use this to research topics by retrieving information from web pages. Returns the page title and main text content.',
+        inputSchema: z.object({
+          url: z.string().url().describe('The URL to fetch content from'),
         }),
+        execute: async ({ url }) => {
+          const result = await fetchUrl(url)
+          if (!result.success) {
+            return { success: false, error: result.error }
+          }
+          return {
+            success: true,
+            url: result.url,
+            title: result.title,
+            content: result.content,
+          }
+        },
+      }),
 
-        get_document: tool({
-          description: 'Retrieve the current document state including title and content. Call this to see what has been written so far before making changes.',
-          inputSchema: z.object({}),
-          execute: async () => {
-            const current = db.select().from(documents).where(eq(documents.id, docId)).get()
-            if (!current) return { error: 'Document not found' }
+      get_document: tool({
+        description: 'Retrieve the current document state including title and content. Call this to see what has been written so far before making changes.',
+        inputSchema: z.object({}),
+        execute: async () => {
+          const current = db.select().from(documents).where(eq(documents.id, docId)).get()
+          if (!current) return { error: 'Document not found' }
 
-            // Update last read timestamp for stale context detection
-            db.update(documents)
-              .set({ contentLastReadAt: new Date() })
-              .where(eq(documents.id, docId))
-              .run()
+          // Update last read timestamp for stale context detection
+          db.update(documents)
+            .set({ contentLastReadAt: new Date() })
+            .where(eq(documents.id, docId))
+            .run()
 
-            return {
-              title: current.title,
-              content: current.body,
-              summary: current.summary,
-            }
-          },
-        }),
+          return {
+            title: current.title,
+            content: current.body,
+            summary: current.summary,
+          }
+        },
+      }),
+    }
 
-        update_document: tool({
+    // ─── Write tools (only available in Build mode) ──────────────────────────
+    const writeTools = {
+      update_document: tool({
           description: 'Create or replace the entire document content. Use this for initial document creation or major rewrites.',
           inputSchema: z.object({
             title: z.string().describe('Document title'),
@@ -235,7 +241,19 @@ export default defineLazyEventHandler(() => {
             return { success: true, operationsApplied: operations.length }
           },
         }),
-      },
+      }
+
+    // Select tools based on mode
+    const tools = mode === 'plan'
+      ? readOnlyTools
+      : { ...readOnlyTools, ...writeTools }
+
+    const result = streamText({
+      model,
+      system: systemPrompt,
+      messages: compaction.messages,
+      stopWhen: stepCountIs(5),
+      tools,
       maxOutputTokens: 16384,
       onFinish: async ({ totalUsage }) => {
         // Record token usage to database
