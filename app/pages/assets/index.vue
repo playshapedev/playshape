@@ -4,46 +4,27 @@ const toast = useToast()
 
 const { assets, pending, refresh } = useAssets()
 
-// Background task integration for video uploads and image generation
-const { addTask, startTask, updateTask, completeTask, failTask, getTask } = useBackgroundTasks()
+// Background task integration for video uploads
+const { addTask, startTask, updateTask, completeTask, failTask } = useBackgroundTasks()
 
 // ─── Generate Image ──────────────────────────────────────────────────────────
 
-const generateModalOpen = ref(false)
-const generatePrompt = ref('')
-const generateName = ref('')
-const isGenerating = ref(false)
-const generatingTaskId = ref<string | null>(null)
+const creatingAsset = ref(false)
 
-// Watch for generation task completion
-watch(() => generatingTaskId.value ? getTask(generatingTaskId.value) : null, (task) => {
-  if (!task) return
+async function handleGenerateImage() {
+  if (creatingAsset.value) return
 
-  if (task.status === 'completed' && task.result) {
-    const result = task.result as { assetId: string }
-    isGenerating.value = false
-    generatingTaskId.value = null
-    generateModalOpen.value = false
-    generatePrompt.value = ''
-    generateName.value = ''
-    // Navigate to the new asset
-    router.push(`/assets/${result.assetId}`)
+  creatingAsset.value = true
+  try {
+    // Create empty asset and navigate to it - user will enter prompt in chat
+    const asset = await createAsset({ name: 'New Image' })
+    router.push(`/assets/${asset.id}`)
   }
-  else if (task.status === 'failed') {
-    isGenerating.value = false
-    generatingTaskId.value = null
-    toast.add({ title: 'Generation failed', description: task.error, color: 'error' })
+  catch (error) {
+    toast.add({ title: 'Failed to create asset', color: 'error' })
+    console.error(error)
+    creatingAsset.value = false
   }
-}, { deep: true })
-
-function handleGenerateImage() {
-  if (!generatePrompt.value.trim()) return
-
-  isGenerating.value = true
-  generatingTaskId.value = generateImageInBackground({
-    prompt: generatePrompt.value.trim(),
-    name: generateName.value.trim() || undefined,
-  })
 }
 
 // ─── Image Upload ────────────────────────────────────────────────────────────
@@ -242,7 +223,8 @@ async function handleDelete() {
         </UDropdownMenu>
         <UButton
           icon="i-lucide-sparkles"
-          @click="generateModalOpen = true"
+          :loading="creatingAsset"
+          @click="handleGenerateImage"
         >
           Generate Image
         </UButton>
@@ -295,7 +277,8 @@ async function handleDelete() {
         </UDropdownMenu>
         <UButton
           icon="i-lucide-sparkles"
-          @click="generateModalOpen = true"
+          :loading="creatingAsset"
+          @click="handleGenerateImage"
         >
           Generate Image
         </UButton>
@@ -368,71 +351,6 @@ async function handleDelete() {
                 @click="handleAddVideoUrl"
               >
                 Add Video
-              </UButton>
-            </div>
-          </template>
-        </UCard>
-      </template>
-    </UModal>
-
-    <!-- Generate Image Modal -->
-    <UModal v-model:open="generateModalOpen">
-      <template #content>
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h3 class="text-lg font-semibold text-highlighted">Generate Image</h3>
-              <UButton
-                icon="i-lucide-x"
-                variant="ghost"
-                color="neutral"
-                size="sm"
-                :disabled="isGenerating"
-                @click="generateModalOpen = false"
-              />
-            </div>
-          </template>
-
-          <div class="space-y-4">
-            <UFormField label="Prompt" required>
-              <UTextarea
-                v-model="generatePrompt"
-                placeholder="Describe the image you want to generate..."
-                :rows="4"
-                :disabled="isGenerating"
-                autofocus
-              />
-            </UFormField>
-            <UFormField label="Name" hint="Optional">
-              <UInput
-                v-model="generateName"
-                placeholder="Give your image a name"
-                :disabled="isGenerating"
-              />
-            </UFormField>
-            <p v-if="isGenerating" class="text-sm text-muted flex items-center gap-2">
-              <UIcon name="i-lucide-loader-circle" class="size-4 animate-spin" />
-              Generating image in background...
-            </p>
-          </div>
-
-          <template #footer>
-            <div class="flex justify-end gap-2">
-              <UButton
-                variant="ghost"
-                color="neutral"
-                :disabled="isGenerating"
-                @click="generateModalOpen = false"
-              >
-                Cancel
-              </UButton>
-              <UButton
-                icon="i-lucide-sparkles"
-                :loading="isGenerating"
-                :disabled="!generatePrompt.trim() || isGenerating"
-                @click="handleGenerateImage"
-              >
-                Generate
               </UButton>
             </div>
           </template>
