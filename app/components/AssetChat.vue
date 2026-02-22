@@ -185,7 +185,7 @@ onAssetUpdate.value = () => emit('update')
 const isRunning = computed(() => chat.status === 'streaming' || chat.status === 'submitted')
 
 const input = ref('')
-const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
+const textareaRef = ref<{ textareaRef: HTMLTextAreaElement } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
 const innerWrapperRef = ref<HTMLElement | null>(null)
 
@@ -366,7 +366,7 @@ function cancelQuestions() {
   customAnswerText.value = ''
   // Refocus the text input
   nextTick(() => {
-    textareaRef.value?.textarea?.focus()
+    textareaRef.value?.textareaRef?.focus()
   })
 }
 
@@ -564,7 +564,7 @@ onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('paste', onPaste)
   // Autofocus the input
-  nextTick(() => textareaRef.value?.textarea?.focus())
+  nextTick(() => textareaRef.value?.textareaRef?.focus())
 
   if (messagesContainer.value) {
     // Track container (viewport) height for spacer calculations

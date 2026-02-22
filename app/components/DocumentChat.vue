@@ -39,7 +39,7 @@ const { sendMessage, stopGeneration, tokenUsage } = documentChat
 const isRunning = computed(() => chatInstance.status === 'streaming' || chatInstance.status === 'submitted')
 
 const input = ref('')
-const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
+const textareaRef = ref<{ textareaRef: HTMLTextAreaElement } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
 const innerWrapperRef = ref<HTMLElement | null>(null)
 
@@ -194,7 +194,7 @@ function cancelQuestions() {
   customAnswerText.value = ''
   // Refocus the text input
   nextTick(() => {
-    textareaRef.value?.textarea?.focus()
+    textareaRef.value?.textareaRef?.focus()
   })
 }
 
@@ -292,7 +292,7 @@ function onKeyDown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   // Autofocus the input
-  nextTick(() => textareaRef.value?.textarea?.focus())
+  nextTick(() => textareaRef.value?.textareaRef?.focus())
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
