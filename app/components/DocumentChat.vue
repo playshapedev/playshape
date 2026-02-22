@@ -749,6 +749,7 @@ watch(() => chatInstance.messages.length, (count) => {
           placeholder="Describe what you want to create or change..."
           :rows="1"
           autoresize
+          autofocus
           class="flex-1 font-mono text-sm"
           variant="none"
           :disabled="isRunning"

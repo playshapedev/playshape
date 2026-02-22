@@ -1090,6 +1090,7 @@ watch(() => visibleMessages.value.length, (count) => {
           class="flex-1 font-mono text-sm"
           variant="none"
           autoresize
+          autofocus
           :rows="1"
           :maxrows="6"
           :disabled="isRunning || isUploading"
