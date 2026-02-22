@@ -502,17 +502,17 @@ onUnmounted(() => {
           </UButton>
           <template #item="{ item }">
             <div
-              class="flex items-center justify-between w-full"
+              class="flex items-center justify-between w-full text-left"
               @click="selectModel(item.value)"
             >
-              <div>
+              <div class="text-left">
                 <div class="font-medium">{{ item.label }}</div>
                 <div class="text-xs text-muted">{{ item.description }}</div>
               </div>
               <UIcon
                 v-if="item.value === selectedModelId"
                 name="i-lucide-check"
-                class="size-4 text-primary"
+                class="size-4 text-primary shrink-0"
               />
             </div>
           </template>
@@ -536,17 +536,17 @@ onUnmounted(() => {
           </UButton>
           <template #item="{ item }">
             <div
-              class="flex items-center justify-between w-full"
+              class="flex items-center justify-between w-full text-left"
               @click="selectAspectRatio(item.value)"
             >
-              <div class="flex items-center gap-3">
+              <div class="flex items-center gap-3 text-left">
                 <span class="text-xs text-muted w-10">{{ item.description }}</span>
                 <span class="font-medium">{{ item.label }}</span>
               </div>
               <UIcon
                 v-if="item.value === selectedAspectRatio"
                 name="i-lucide-check"
-                class="size-4 text-primary"
+                class="size-4 text-primary shrink-0"
               />
             </div>
           </template>
