@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UIMessage } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
+import type { TokenUsageMetadata } from '~/composables/useDocumentChat'
 
 const props = defineProps<{
   libraryId: string
@@ -12,18 +13,13 @@ const emit = defineEmits<{
   update: []
 }>()
 
-const { chat, sendMessage, stopGeneration } = useDocumentChat(
-  props.libraryId,
-  props.documentId,
-  props.initialMessages,
-)
-
 // Wire up the update callback
 const documentChat = useDocumentChat(props.libraryId, props.documentId, props.initialMessages)
 documentChat.onDocumentUpdate.value = () => emit('update')
 
 // Use the chat from the composable
 const chatInstance = documentChat.chat as Chat<UIMessage>
+const { sendMessage, stopGeneration, tokenUsage } = documentChat
 
 const isRunning = computed(() => chatInstance.status === 'streaming' || chatInstance.status === 'submitted')
 
@@ -292,6 +288,15 @@ watch(() => chatInstance.messages.length, (count) => {
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
+    <!-- Header with token usage -->
+    <div v-if="tokenUsage.totalTokens || tokenUsage.contextTokens" class="flex justify-end px-3 py-1.5 border-b border-default">
+      <ChatTokenUsage
+        :total-tokens="tokenUsage.totalTokens"
+        :context-tokens="tokenUsage.contextTokens"
+        :was-compacted="tokenUsage.wasCompacted"
+      />
+    </div>
+
     <!-- Messages (scroll container) -->
     <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden">
       <div ref="innerWrapperRef" class="relative min-h-full flex flex-col justify-end p-3 space-y-3">
@@ -400,6 +405,15 @@ watch(() => chatInstance.messages.length, (count) => {
               </div>
             </template>
           </div>
+        </div>
+
+        <!-- Compaction message (when context was summarized) -->
+        <div
+          v-if="tokenUsage.wasCompacted && tokenUsage.compactionMessage"
+          class="text-xs text-muted italic py-2 px-3 bg-muted/30 rounded flex items-center gap-2"
+        >
+          <UIcon name="i-lucide-archive" class="size-3.5 shrink-0" />
+          <span>{{ tokenUsage.compactionMessage }}</span>
         </div>
 
         <!-- Loading indicator -->

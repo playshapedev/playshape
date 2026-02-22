@@ -2,6 +2,16 @@ import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
 
+/** Token usage metadata sent from the server */
+export interface TokenUsageMetadata {
+  contextTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  wasCompacted?: boolean
+  compactionMessage?: string
+}
+
 /**
  * Creates a Chat instance for AI-generated document conversations.
  *
@@ -18,12 +28,15 @@ export function useDocumentChat(
   // Track whether the last AI response included a document update
   const lastResponseHadUpdate = ref(false)
 
+  // Token usage - tracks cumulative totals for the conversation
+  const tokenUsage = ref<TokenUsageMetadata>({})
+
   const chat = new Chat({
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `/api/libraries/${libraryId}/documents/${documentId}/chat`,
     }),
-    onFinish: async () => {
+    onFinish: async ({ message }) => {
       // Check if any assistant message in this response updated the document
       lastResponseHadUpdate.value = chat.messages.some(msg =>
         msg.role === 'assistant'
@@ -31,6 +44,25 @@ export function useDocumentChat(
           p.type === 'tool-update_document' || p.type === 'tool-patch_document',
         ),
       )
+
+      // Extract token usage from message metadata and accumulate
+      const metadata = message?.metadata as { tokenUsage?: TokenUsageMetadata } | undefined
+      if (metadata?.tokenUsage) {
+        const prev = tokenUsage.value
+        const incoming = metadata.tokenUsage
+
+        tokenUsage.value = {
+          // Accumulate tokens across responses
+          promptTokens: (prev.promptTokens ?? 0) + (incoming.promptTokens ?? 0),
+          completionTokens: (prev.completionTokens ?? 0) + (incoming.completionTokens ?? 0),
+          totalTokens: (prev.totalTokens ?? 0) + (incoming.totalTokens ?? 0),
+          // Context tokens are from the latest request only
+          contextTokens: incoming.contextTokens,
+          // Track if any response used compaction
+          wasCompacted: prev.wasCompacted || incoming.wasCompacted,
+          compactionMessage: incoming.compactionMessage || prev.compactionMessage,
+        }
+      }
 
       await saveMessages()
       onDocumentUpdate.value?.()
@@ -81,5 +113,6 @@ export function useDocumentChat(
     saveMessages,
     onDocumentUpdate,
     lastResponseHadUpdate,
+    tokenUsage,
   }
 }

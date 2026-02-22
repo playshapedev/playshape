@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UIMessage, FileUIPart } from 'ai'
 import type { AIProviderType } from '~/composables/useAIProviders'
+import type { TokenUsageMetadata } from '~/composables/useAssetChat'
 import { ASPECT_RATIOS, DEFAULT_ASPECT_RATIO } from '~/utils/aspectRatios'
 
 const props = defineProps<{
@@ -155,7 +156,7 @@ const selectedAspectRatioLabel = computed(() => {
 
 // ─── Chat ────────────────────────────────────────────────────────────────────
 
-const { chat, sendMessage, stopGeneration, onAssetUpdate } = useAssetChat(
+const { chat, sendMessage, stopGeneration, onAssetUpdate, tokenUsage } = useAssetChat(
   props.assetId,
   props.initialMessages,
   selectedModelId,
@@ -479,7 +480,8 @@ onUnmounted(() => {
 <template>
   <div class="flex flex-col h-full overflow-hidden">
     <!-- Model and aspect ratio selector header -->
-    <div class="border-b border-default p-3 flex items-center gap-4">
+    <div class="border-b border-default p-3 flex items-center justify-between">
+      <div class="flex items-center gap-4">
       <!-- Model selector -->
       <div class="flex items-center gap-2">
         <span class="text-sm text-muted">Model:</span>
@@ -547,6 +549,15 @@ onUnmounted(() => {
           </template>
         </UDropdownMenu>
       </div>
+      </div>
+
+      <!-- Token usage display -->
+      <ChatTokenUsage
+        v-if="tokenUsage.totalTokens || tokenUsage.contextTokens"
+        :total-tokens="tokenUsage.totalTokens"
+        :context-tokens="tokenUsage.contextTokens"
+        :was-compacted="tokenUsage.wasCompacted"
+      />
     </div>
 
     <!-- Messages (scroll container) -->
@@ -623,6 +634,15 @@ onUnmounted(() => {
               <!-- Get asset: silently ignore -->
             </template>
           </div>
+        </div>
+
+        <!-- Compaction message (when context was summarized) -->
+        <div
+          v-if="tokenUsage.wasCompacted && tokenUsage.compactionMessage"
+          class="text-xs text-muted italic py-2 px-3 bg-muted/30 rounded flex items-center gap-2"
+        >
+          <UIcon name="i-lucide-archive" class="size-3.5 shrink-0" />
+          <span>{{ tokenUsage.compactionMessage }}</span>
         </div>
 
       <!-- Loading indicator -->

@@ -1,7 +1,7 @@
 The template has these parts:
    - **fields**: An array of field definitions that describe what data the template needs. Available field types:
-     - `text` — Single-line text input. Supports `placeholder` and `default`.
-     - `textarea` — Multi-line text input. Supports `placeholder` and `default`.
+     - `text` — Single-line text input. Supports `placeholder` and `default`. May contain inline Markdown formatting. **Always render with `v-html`:** `<span v-html="data.fieldId"></span>`
+     - `textarea` — Multi-line rich text input. Supports `placeholder` and `default`. Content is Markdown converted to sanitized HTML by the system. **Always render with `v-html`:** `<div v-html="data.fieldId"></div>`
      - `dropdown` — Select from predefined options. Requires `options` array of strings. Supports `default`.
      - `checkbox` — Boolean toggle. Supports `default`.
      - `number` — Numeric input. Supports `min`, `max`, and `default`.

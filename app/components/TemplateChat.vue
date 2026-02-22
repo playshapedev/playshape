@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { UIMessage, FileUIPart } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
+import type { TokenUsageMetadata } from '~/composables/useTemplateChat'
 
 /**
  * Tool indicator configuration: maps tool part types to their display info.
@@ -118,6 +119,9 @@ const chat: Chat<UIMessage> = props.chatInstance ? props.chatInstance.chat : tem
 const sendMessage: (content: string, files?: FileUIPart[]) => void = props.chatInstance ? props.chatInstance.sendMessage : templateChat!.sendMessage
 const stopGeneration: () => Promise<void> = props.chatInstance ? props.chatInstance.stopGeneration : templateChat!.stopGeneration
 const reportPreviewError: (error: string) => void = props.chatInstance ? props.chatInstance.reportPreviewError : templateChat!.reportPreviewError
+
+// Token usage tracking (from internal chat only for now)
+const tokenUsage = templateChat ? templateChat.tokenUsage : ref<TokenUsageMetadata>({})
 
 // Wire up the onFinish callback to emit update events.
 // For external chat instances the parent wires onFinish directly — we still emit
@@ -531,6 +535,15 @@ watch(() => visibleMessages.value.length, (count) => {
 
 <template>
   <div class="flex flex-col h-full overflow-hidden">
+    <!-- Header with token usage -->
+    <div v-if="tokenUsage.totalTokens || tokenUsage.contextTokens" class="flex justify-end px-3 py-1.5 border-b border-default">
+      <ChatTokenUsage
+        :total-tokens="tokenUsage.totalTokens"
+        :context-tokens="tokenUsage.contextTokens"
+        :was-compacted="tokenUsage.wasCompacted"
+      />
+    </div>
+
     <!-- Messages (scroll container) -->
     <div ref="messagesContainer" class="flex-1 overflow-y-auto overflow-x-hidden">
       <!-- Inner wrapper: min-h-full + justify-end pushes messages to the bottom
@@ -665,6 +678,15 @@ watch(() => visibleMessages.value.length, (count) => {
                 </div>
               </template>
             </div>
+        </div>
+
+        <!-- Compaction message (when context was summarized) -->
+        <div
+          v-if="tokenUsage.wasCompacted && tokenUsage.compactionMessage"
+          class="text-xs text-muted italic py-2 px-3 bg-muted/30 rounded flex items-center gap-2"
+        >
+          <UIcon name="i-lucide-archive" class="size-3.5 shrink-0" />
+          <span>{{ tokenUsage.compactionMessage }}</span>
         </div>
 
         <!-- Loading indicator (only before any content arrives) -->

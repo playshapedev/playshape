@@ -157,7 +157,7 @@ export const projectLibraries = sqliteTable('project_libraries', {
 // in aiModels table, allowing multiple models per provider with one API key.
 
 /** Canonical list of supported AI provider types. Add new providers here. */
-export const AI_PROVIDER_TYPES = ['ollama', 'lmstudio', 'openai', 'anthropic', 'fireworks', 'replicate', 'fal'] as const
+export const AI_PROVIDER_TYPES = ['ollama', 'lmstudio', 'openai', 'anthropic', 'fireworks', 'replicate', 'fal', 'together'] as const
 export type AIProviderType = (typeof AI_PROVIDER_TYPES)[number]
 
 export const aiProviders = sqliteTable('ai_providers', {
@@ -458,6 +458,28 @@ export const chatAttachments = sqliteTable('chat_attachments', {
   width: integer('width'),
   height: integer('height'),
   fileSize: integer('file_size'), // bytes
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Token Usage ─────────────────────────────────────────────────────────────
+// Tracks token consumption per chat conversation for cost monitoring and
+// analytics. Records are created after each LLM call with usage from the
+// provider's response.
+
+/** Entity types that have chat conversations */
+export const TOKEN_USAGE_ENTITY_TYPES = ['template', 'activity', 'document', 'asset'] as const
+export type TokenUsageEntityType = (typeof TOKEN_USAGE_ENTITY_TYPES)[number]
+
+export const tokenUsage = sqliteTable('token_usage', {
+  id: text('id').primaryKey(),
+  entityType: text('entity_type').$type<TokenUsageEntityType>().notNull(),
+  entityId: text('entity_id').notNull(), // FK to templates/activities/documents/assets
+  providerId: text('provider_id'), // FK to aiProviders (nullable for legacy data)
+  modelId: text('model_id').notNull(), // model identifier string
+  promptTokens: integer('prompt_tokens').notNull(),
+  completionTokens: integer('completion_tokens').notNull(),
+  totalTokens: integer('total_tokens').notNull(),
+  wasCompacted: integer('was_compacted', { mode: 'boolean' }).notNull().default(false),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 

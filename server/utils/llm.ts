@@ -6,7 +6,7 @@ import { createOllama } from 'ollama-ai-provider-v2'
 import { createFireworks } from '@ai-sdk/fireworks'
 import { aiProviders, aiModels, llmProviders } from '../database/schema'
 
-type ProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks' | 'replicate' | 'fal'
+type ProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks' | 'replicate' | 'fal' | 'together'
 
 interface ProviderConfig {
   type: ProviderType
@@ -68,6 +68,20 @@ export function createLanguageModel(config: ProviderConfig): any {
         apiKey: config.apiKey,
       })
       return fireworks(config.model)
+    }
+
+    case 'together': {
+      if (!config.apiKey) {
+        throw createError({ statusCode: 400, statusMessage: 'Together AI API key is required' })
+      }
+      const together = createOpenAICompatible({
+        name: 'together',
+        baseURL: 'https://api.together.xyz/v1',
+        headers: {
+          Authorization: `Bearer ${config.apiKey}`,
+        },
+      })
+      return together(config.model)
     }
 
     default:

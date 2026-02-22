@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
+import { streamText, tool, stepCountIs } from 'ai'
 import type { UIMessage } from 'ai'
 import { eq, and } from 'drizzle-orm'
 import { templates, templateVersions, templatePendingChanges, templateMigrations, activities, courseSections, courses, projects } from '~~/server/database/schema'
@@ -10,6 +10,9 @@ import { fieldSchema } from '~~/server/utils/tools/fieldSchema'
 import { hasSchemaChanged } from '~~/server/utils/schemaEquality'
 import { runMigration, validateMigrationSyntax } from '~~/server/utils/runMigration'
 import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSchema'
+import { compactContext } from '~~/server/utils/contextCompaction'
+import { recordTokenUsage } from '~~/server/utils/tokens'
+import { validateTemplate } from '~~/server/utils/templateValidation'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -57,22 +60,19 @@ export default defineLazyEventHandler(() => {
       : prompts.activity
 
     let model
+    let provider: { id: string } | null = null
     try {
-      ;({ model } = useActiveModel())
+      const active = useActiveModel()
+      model = active.model
+      provider = active.provider
     }
     catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'No active LLM provider configured'
       throw createError({ statusCode: 409, statusMessage: message })
     }
 
-    let convertedMessages
-    try {
-      convertedMessages = await convertToModelMessages(messages)
-    }
-    catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to process messages'
-      throw createError({ statusCode: 400, statusMessage: message })
-    }
+    // Apply context compaction if needed
+    const compaction = await compactContext(messages, systemPrompt, model)
 
     // For interfaces, the update_template tool description is adjusted
     const updateTemplateDescription = tmpl.kind === 'interface'
@@ -82,7 +82,7 @@ export default defineLazyEventHandler(() => {
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: convertedMessages,
+      messages: compaction.messages,
       stopWhen: stepCountIs(5),
       tools: {
         get_reference: getReferenceTool,
@@ -248,6 +248,11 @@ export default defineLazyEventHandler(() => {
                 .where(eq(templates.id, id))
                 .run()
 
+              // Check for warnings (non-blocking)
+              const warnings = validateTemplate(fields as TemplateField[], sampleData as Record<string, unknown>, component)
+              if (warnings.length > 0) {
+                return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
+              }
               return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true }
             }
 
@@ -283,6 +288,11 @@ export default defineLazyEventHandler(() => {
               )
               .run()
 
+            // Check for warnings (non-blocking)
+            const warnings = validateTemplate(fields as TemplateField[], sampleData as Record<string, unknown>, component)
+            if (warnings.length > 0) {
+              return { success: true, fieldCount: fields.length, warnings: warnings.map(w => w.message) }
+            }
             return { success: true, fieldCount: fields.length }
           },
         }),
@@ -478,6 +488,13 @@ export default defineLazyEventHandler(() => {
                 .where(eq(templates.id, id))
                 .run()
 
+              // Check for warnings (non-blocking)
+              const finalFields = fields as TemplateField[]
+              const finalSampleData = (sampleData ?? current.sampleData) as Record<string, unknown>
+              const warnings = validateTemplate(finalFields, finalSampleData, patched)
+              if (warnings.length > 0) {
+                return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
+              }
               return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true }
             }
 
@@ -517,7 +534,65 @@ export default defineLazyEventHandler(() => {
                 .run()
             }
 
+            // Check for warnings (non-blocking)
+            const finalFields = (fields ?? current.inputSchema) as TemplateField[]
+            const finalSampleData = (sampleData ?? current.sampleData) as Record<string, unknown>
+            const warnings = validateTemplate(finalFields, finalSampleData, patched)
+            if (warnings.length > 0) {
+              return { success: true, operationsApplied: operations.length, warnings: warnings.map(w => w.message) }
+            }
             return { success: true, operationsApplied: operations.length }
+          },
+        }),
+        update_sample_data: tool({
+          description: 'Update only the sample data without changing the schema, component, or dependencies. Use this for quick iterations on example content, fixing validation warnings about HTML in sample data, or testing how different content renders.',
+          inputSchema: z.object({
+            sampleData: z.record(z.string(), z.unknown()).describe('Updated sample data matching the existing field IDs. For array fields, include 2-3 representative items with meaningful content. Use Markdown for formatted text (not HTML tags).'),
+          }),
+          execute: async ({ sampleData }) => {
+            const current = db.select().from(templates).where(eq(templates.id, id)).get()
+            if (!current) return { success: false, error: 'Template not found' }
+
+            const currentFields = current.inputSchema as TemplateField[] | null
+            if (!currentFields || currentFields.length === 0) {
+              return { success: false, error: 'Template has no schema defined. Use update_template to create the initial template first.' }
+            }
+
+            // Validate sample data against the existing schema
+            const validation = validateDataAgainstSchema(sampleData, currentFields)
+            if (!validation.success) {
+              return {
+                success: false,
+                error: `Sample data does not match the schema: ${validation.errors.join(', ')}`,
+              }
+            }
+
+            // Update template
+            db.update(templates)
+              .set({
+                sampleData,
+                updatedAt: new Date(),
+              })
+              .where(eq(templates.id, id))
+              .run()
+
+            // Update current version snapshot
+            db.update(templateVersions)
+              .set({ sampleData })
+              .where(
+                and(
+                  eq(templateVersions.templateId, id),
+                  eq(templateVersions.version, current.schemaVersion),
+                ),
+              )
+              .run()
+
+            // Check for warnings (non-blocking)
+            const warnings = validateTemplate(currentFields, sampleData as Record<string, unknown>, current.component ?? '')
+            if (warnings.length > 0) {
+              return { success: true, warnings: warnings.map(w => w.message) }
+            }
+            return { success: true }
           },
         }),
         commit_schema_change: tool({
@@ -756,8 +831,51 @@ export default defineLazyEventHandler(() => {
         }),
       },
       maxOutputTokens: 16384,
+      onFinish: async ({ totalUsage }) => {
+        // Record token usage to database
+        // AI SDK v6 uses inputTokens/outputTokens, we store as promptTokens/completionTokens
+        if (totalUsage) {
+          const promptTokens = totalUsage.inputTokens ?? 0
+          const completionTokens = totalUsage.outputTokens ?? 0
+          await recordTokenUsage({
+            entityType: 'template',
+            entityId: id,
+            providerId: provider?.id ?? null,
+            modelId: model.modelId ?? 'unknown',
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            wasCompacted: compaction.wasCompacted,
+          })
+        }
+      },
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type === 'start') {
+          return {
+            tokenUsage: {
+              contextTokens: compaction.compactedTokens,
+              wasCompacted: compaction.wasCompacted,
+              compactionMessage: compaction.compactionMessage,
+            },
+          }
+        }
+        if (part.type === 'finish') {
+          // AI SDK v6 uses inputTokens/outputTokens
+          const promptTokens = part.totalUsage?.inputTokens ?? 0
+          const completionTokens = part.totalUsage?.outputTokens ?? 0
+          return {
+            tokenUsage: {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+            },
+          }
+        }
+        return undefined
+      },
+    })
   })
 })

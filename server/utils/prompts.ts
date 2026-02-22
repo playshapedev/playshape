@@ -10,6 +10,7 @@ const PROMPT_FILES = [
   'activity-tools',
   'design-system',
   'course-api',
+  'template-core',
   'activity',
   'interface',
   'activity-editor',
@@ -50,6 +51,7 @@ export async function useSystemPrompts() {
     p['activity-tools'],
     p['design-system'],
     p['course-api'],
+    p['template-core'],
   ].join('\n\n')
 
   return {

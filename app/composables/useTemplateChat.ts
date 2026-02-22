@@ -2,6 +2,16 @@ import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage, FileUIPart } from 'ai'
 
+/** Token usage metadata sent from the server */
+export interface TokenUsageMetadata {
+  contextTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  wasCompacted?: boolean
+  compactionMessage?: string
+}
+
 /**
  * Creates a Chat instance for a template's AI conversation.
  *
@@ -19,17 +29,39 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
   // Used to auto-report preview errors back to the AI for self-correction.
   const lastResponseHadUpdate = ref(false)
 
+  // Token usage - tracks cumulative totals for the conversation
+  const tokenUsage = ref<TokenUsageMetadata>({})
+
   const chat = new Chat({
     messages: initialMessages,
     transport: new DefaultChatTransport({
       api: `/api/templates/${templateId}/chat`,
     }),
-    onFinish: async () => {
+    onFinish: async ({ message }) => {
       // Check if any assistant message in this response used update_template
       lastResponseHadUpdate.value = chat.messages.some(msg =>
         msg.role === 'assistant'
         && msg.parts.some(p => p.type === 'tool-update_template' || p.type === 'tool-patch_component'),
       )
+
+      // Extract token usage from message metadata and accumulate
+      const metadata = message?.metadata as { tokenUsage?: TokenUsageMetadata } | undefined
+      if (metadata?.tokenUsage) {
+        const prev = tokenUsage.value
+        const incoming = metadata.tokenUsage
+
+        tokenUsage.value = {
+          // Accumulate tokens across responses
+          promptTokens: (prev.promptTokens ?? 0) + (incoming.promptTokens ?? 0),
+          completionTokens: (prev.completionTokens ?? 0) + (incoming.completionTokens ?? 0),
+          totalTokens: (prev.totalTokens ?? 0) + (incoming.totalTokens ?? 0),
+          // Context tokens are from the latest request only
+          contextTokens: incoming.contextTokens,
+          // Track if any response used compaction
+          wasCompacted: prev.wasCompacted || incoming.wasCompacted,
+          compactionMessage: incoming.compactionMessage || prev.compactionMessage,
+        }
+      }
 
       await saveMessages()
       onTemplateUpdate.value?.()
@@ -104,5 +136,6 @@ export function useTemplateChat(templateId: string, initialMessages: UIMessage[]
     saveMessages,
     onTemplateUpdate,
     reportPreviewError,
+    tokenUsage,
   }
 }

@@ -2,6 +2,16 @@ import { Chat } from '@ai-sdk/vue'
 import { DefaultChatTransport } from 'ai'
 import type { UIMessage, FileUIPart } from 'ai'
 
+/** Token usage metadata sent from the server */
+export interface TokenUsageMetadata {
+  contextTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  wasCompacted?: boolean
+  compactionMessage?: string
+}
+
 /**
  * Creates a Chat instance for an asset's AI image generation conversation.
  *
@@ -19,6 +29,9 @@ export function useAssetChat(
   // Track whether the last AI response included a generate_image tool call
   const lastResponseHadGeneration = ref(false)
 
+  // Token usage - tracks cumulative totals for the conversation
+  const tokenUsage = ref<TokenUsageMetadata>({})
+
   const chat = new Chat({
     messages: initialMessages,
     transport: new DefaultChatTransport({
@@ -28,12 +41,31 @@ export function useAssetChat(
         aspectRatio: aspectRatio?.value,
       }),
     }),
-    onFinish: async () => {
+    onFinish: async ({ message }) => {
       // Check if any assistant message in this response used generate_image
       lastResponseHadGeneration.value = chat.messages.some(msg =>
         msg.role === 'assistant'
         && msg.parts.some(p => p.type === 'tool-generate_image'),
       )
+
+      // Extract token usage from message metadata and accumulate
+      const metadata = message?.metadata as { tokenUsage?: TokenUsageMetadata } | undefined
+      if (metadata?.tokenUsage) {
+        const prev = tokenUsage.value
+        const incoming = metadata.tokenUsage
+
+        tokenUsage.value = {
+          // Accumulate tokens across responses
+          promptTokens: (prev.promptTokens ?? 0) + (incoming.promptTokens ?? 0),
+          completionTokens: (prev.completionTokens ?? 0) + (incoming.completionTokens ?? 0),
+          totalTokens: (prev.totalTokens ?? 0) + (incoming.totalTokens ?? 0),
+          // Context tokens are from the latest request only
+          contextTokens: incoming.contextTokens,
+          // Track if any response used compaction
+          wasCompacted: prev.wasCompacted || incoming.wasCompacted,
+          compactionMessage: incoming.compactionMessage || prev.compactionMessage,
+        }
+      }
 
       await saveMessages()
       onAssetUpdate.value?.()
@@ -99,5 +131,6 @@ export function useAssetChat(
     onAssetUpdate,
     reportError,
     lastResponseHadGeneration,
+    tokenUsage,
   }
 }

@@ -1,10 +1,12 @@
 import { z } from 'zod'
-import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
+import { streamText, tool, stepCountIs } from 'ai'
 import type { UIMessage } from 'ai'
 import { eq } from 'drizzle-orm'
 import { documents, libraries } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { fetchUrl } from '~~/server/utils/webFetch'
+import { compactContext } from '~~/server/utils/contextCompaction'
+import { recordTokenUsage } from '~~/server/utils/tokens'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -55,27 +57,24 @@ export default defineLazyEventHandler(() => {
     const systemPrompt = await useDocumentGenerationPrompt()
 
     let model
+    let provider: { id: string } | null = null
     try {
-      ;({ model } = useActiveModel())
+      const active = useActiveModel()
+      model = active.model
+      provider = active.provider
     }
     catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'No active LLM provider configured'
       throw createError({ statusCode: 409, statusMessage: message })
     }
 
-    let convertedMessages
-    try {
-      convertedMessages = await convertToModelMessages(messages)
-    }
-    catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to process messages'
-      throw createError({ statusCode: 400, statusMessage: message })
-    }
+    // Apply context compaction if needed
+    const compaction = await compactContext(messages, systemPrompt, model)
 
     const result = streamText({
       model,
       system: systemPrompt,
-      messages: convertedMessages,
+      messages: compaction.messages,
       stopWhen: stepCountIs(5),
       tools: {
         ask_question: askQuestionTool,
@@ -238,8 +237,49 @@ export default defineLazyEventHandler(() => {
         }),
       },
       maxOutputTokens: 16384,
+      onFinish: async ({ totalUsage }) => {
+        // Record token usage to database
+        if (totalUsage) {
+          const promptTokens = totalUsage.inputTokens ?? 0
+          const completionTokens = totalUsage.outputTokens ?? 0
+          await recordTokenUsage({
+            entityType: 'document',
+            entityId: docId,
+            providerId: provider?.id ?? null,
+            modelId: model.modelId ?? 'unknown',
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            wasCompacted: compaction.wasCompacted,
+          })
+        }
+      },
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type === 'start') {
+          return {
+            tokenUsage: {
+              contextTokens: compaction.compactedTokens,
+              wasCompacted: compaction.wasCompacted,
+              compactionMessage: compaction.compactionMessage,
+            },
+          }
+        }
+        if (part.type === 'finish') {
+          const promptTokens = part.totalUsage?.inputTokens ?? 0
+          const completionTokens = part.totalUsage?.outputTokens ?? 0
+          return {
+            tokenUsage: {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+            },
+          }
+        }
+        return undefined
+      },
+    })
   })
 })

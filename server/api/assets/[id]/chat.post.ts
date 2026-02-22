@@ -1,12 +1,14 @@
 import { z } from 'zod'
-import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
+import { streamText, tool, stepCountIs } from 'ai'
 import type { UIMessage } from 'ai'
-import { eq, desc, or } from 'drizzle-orm'
+import { eq, desc } from 'drizzle-orm'
 import { assets, assetImages, chatAttachments } from '~~/server/database/schema'
 import { generateImage, getImageModelConfig, useActiveImageModel, DEFAULT_ASPECT_RATIO, type ReferenceImage } from '~~/server/utils/imageGeneration'
 import { generateAssetImageFilename, saveAssetFile, getAssetImageUrl, readAssetFile } from '~~/server/utils/assetStorage'
 import { readAttachmentFile } from '~~/server/utils/attachmentStorage'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { compactContext } from '~~/server/utils/contextCompaction'
+import { recordTokenUsage } from '~~/server/utils/tokens'
 
 const SYSTEM_PROMPT = `You are an AI assistant helping users create and edit images. Your role is to:
 
@@ -78,8 +80,11 @@ export default defineLazyEventHandler(() => {
 
     // Get the text model for conversation (not image generation)
     let model
+    let provider: { id: string } | null = null
     try {
-      ;({ model } = useActiveModel())
+      const active = useActiveModel()
+      model = active.model
+      provider = active.provider
     }
     catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'No active LLM provider configured'
@@ -98,19 +103,13 @@ export default defineLazyEventHandler(() => {
       })
     }
 
-    let convertedMessages
-    try {
-      convertedMessages = await convertToModelMessages(messages)
-    }
-    catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Failed to process messages'
-      throw createError({ statusCode: 400, statusMessage: message })
-    }
+    // Apply context compaction if needed
+    const compaction = await compactContext(messages, SYSTEM_PROMPT, model)
 
     const result = streamText({
       model,
       system: SYSTEM_PROMPT,
-      messages: convertedMessages,
+      messages: compaction.messages,
       stopWhen: stepCountIs(3),
       maxOutputTokens: 2048,
       tools: {
@@ -288,8 +287,49 @@ export default defineLazyEventHandler(() => {
           },
         }),
       },
+      onFinish: async ({ totalUsage }) => {
+        // Record token usage to database
+        if (totalUsage) {
+          const promptTokens = totalUsage.inputTokens ?? 0
+          const completionTokens = totalUsage.outputTokens ?? 0
+          await recordTokenUsage({
+            entityType: 'asset',
+            entityId: id,
+            providerId: provider?.id ?? null,
+            modelId: model.modelId ?? 'unknown',
+            promptTokens,
+            completionTokens,
+            totalTokens: promptTokens + completionTokens,
+            wasCompacted: compaction.wasCompacted,
+          })
+        }
+      },
     })
 
-    return result.toUIMessageStreamResponse()
+    return result.toUIMessageStreamResponse({
+      messageMetadata: ({ part }) => {
+        if (part.type === 'start') {
+          return {
+            tokenUsage: {
+              contextTokens: compaction.compactedTokens,
+              wasCompacted: compaction.wasCompacted,
+              compactionMessage: compaction.compactionMessage,
+            },
+          }
+        }
+        if (part.type === 'finish') {
+          const promptTokens = part.totalUsage?.inputTokens ?? 0
+          const completionTokens = part.totalUsage?.outputTokens ?? 0
+          return {
+            tokenUsage: {
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+            },
+          }
+        }
+        return undefined
+      },
+    })
   })
 })
