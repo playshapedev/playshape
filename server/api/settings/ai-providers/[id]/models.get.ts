@@ -53,6 +53,11 @@ export default defineEventHandler(async (event) => {
     case 'fal':
       return getFalModels()
 
+    case 'together':
+      return provider.apiKey
+        ? await discoverTogetherModels(provider.apiKey)
+        : getTogetherModelsFallback()
+
     default:
       return []
   }
@@ -272,5 +277,52 @@ function getFalModels(): ModelInfo[] {
     { id: 'fal-ai/flux/schnell', name: 'FLUX Schnell', description: 'Fast generation', purpose: 'image' },
     { id: 'fal-ai/flux/dev', name: 'FLUX Dev', description: 'Development model', purpose: 'image' },
     { id: 'fal-ai/flux-realism', name: 'FLUX Realism', description: 'Photorealistic images', purpose: 'image' },
+  ]
+}
+
+// ─── Together AI ─────────────────────────────────────────────────────────────
+
+async function discoverTogetherModels(apiKey: string): Promise<ModelInfo[]> {
+  try {
+    const response = await fetch('https://api.together.xyz/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+    })
+    if (!response.ok) {
+      return getTogetherModelsFallback()
+    }
+
+    const data = await response.json() as Array<{
+      id: string
+      display_name?: string
+      context_length?: number
+      type?: string
+    }>
+
+    // Filter to chat/language models
+    return data
+      .filter(m => m.type === 'chat' || m.type === 'language')
+      .map(m => ({
+        id: m.id,
+        name: m.display_name || m.id.split('/').pop() || m.id,
+        description: m.context_length ? `${Math.round(m.context_length / 1024)}k context` : undefined,
+        purpose: 'text' as const,
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }
+  catch {
+    return getTogetherModelsFallback()
+  }
+}
+
+function getTogetherModelsFallback(): ModelInfo[] {
+  return [
+    { id: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8', name: 'Llama 4 Maverick 17B', description: '128k context', purpose: 'text' },
+    { id: 'meta-llama/Llama-4-Scout-17B-16E-Instruct', name: 'Llama 4 Scout 17B', description: 'Fast and efficient', purpose: 'text' },
+    { id: 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B Turbo', description: '128k context', purpose: 'text' },
+    { id: 'meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo', name: 'Llama 3.1 405B Turbo', description: 'Largest open model', purpose: 'text' },
+    { id: 'deepseek-ai/DeepSeek-V3', name: 'DeepSeek V3', description: 'Strong coding model', purpose: 'text' },
+    { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo', name: 'Qwen 2.5 72B Turbo', description: 'Multilingual', purpose: 'text' },
+    { id: 'mistralai/Mixtral-8x22B-Instruct-v0.1', name: 'Mixtral 8x22B', description: 'MoE architecture', purpose: 'text' },
+    { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', description: 'Efficient Google model', purpose: 'text' },
   ]
 }

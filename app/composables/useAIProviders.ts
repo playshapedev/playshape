@@ -2,7 +2,7 @@ import type { aiProviders, aiModels } from '~~/server/database/schema'
 
 export type AIProvider = typeof aiProviders.$inferSelect
 export type AIModel = typeof aiModels.$inferSelect
-export type AIProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks' | 'replicate' | 'fal'
+export type AIProviderType = 'ollama' | 'lmstudio' | 'openai' | 'anthropic' | 'fireworks' | 'replicate' | 'fal' | 'together'
 export type AIModelPurpose = 'text' | 'image'
 
 export interface AIProviderWithModels extends AIProvider {
@@ -144,6 +144,13 @@ export const AI_PROVIDER_META: Record<AIProviderType, {
   fal: {
     label: 'fal.ai',
     icon: 'i-lucide-zap',
+    needsApiKey: true,
+    needsBaseUrl: false,
+    defaultBaseUrl: null,
+  },
+  together: {
+    label: 'Together AI',
+    icon: 'i-lucide-combine',
     needsApiKey: true,
     needsBaseUrl: false,
     defaultBaseUrl: null,

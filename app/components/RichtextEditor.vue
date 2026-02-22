@@ -1,8 +1,10 @@
 <script setup lang="ts">
+import type { EditorToolbarItem } from '@nuxt/ui'
+
 /**
  * A minimal rich text editor for textarea fields.
  * Uses Nuxt UI's UEditor with a bubble toolbar (appears on text selection).
- * Outputs HTML content.
+ * Outputs markdown content.
  */
 const props = defineProps<{
   modelValue: string
@@ -31,17 +33,32 @@ watch(content, (val) => {
   skipNextWatch = true
   emit('update:modelValue', val)
 })
+
+// Bubble toolbar items - basic formatting
+const toolbarItems: EditorToolbarItem[][] = [[
+  { kind: 'mark', mark: 'bold', icon: 'i-lucide-bold', tooltip: { text: 'Bold' } },
+  { kind: 'mark', mark: 'italic', icon: 'i-lucide-italic', tooltip: { text: 'Italic' } },
+  { kind: 'mark', mark: 'underline', icon: 'i-lucide-underline', tooltip: { text: 'Underline' } },
+], [
+  { kind: 'link', icon: 'i-lucide-link', tooltip: { text: 'Link' } },
+]]
 </script>
 
 <template>
   <div class="richtext-editor border border-default rounded-md focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-colors">
     <UEditor
+      v-slot="{ editor }"
       v-model="content"
       content-type="markdown"
       :placeholder="placeholder"
       class="min-h-[100px]"
     >
-      <UEditorToolbar layout="bubble" />
+      <UEditorToolbar
+        v-if="editor"
+        :editor="editor"
+        :items="toolbarItems"
+        layout="bubble"
+      />
     </UEditor>
   </div>
 </template>

@@ -7,6 +7,17 @@ const toast = useToast()
 
 const { settings, updateSettings } = useSettings()
 
+// ─── Token Usage ─────────────────────────────────────────────────────────────
+
+const { data: usageData, pending: usagePending } = useFetch('/api/usage')
+
+// Format large numbers with K/M suffixes
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`
+  return count.toString()
+}
+
 async function toggleContentCleanup() {
   const newValue = !settings.value?.contentCleanupEnabled
   await updateSettings({ contentCleanupEnabled: newValue })
@@ -225,6 +236,77 @@ async function onActivateModel(modelId: string, purpose: AIModelPurpose) {
       <p v-if="!activeTextModel" class="text-xs text-muted mt-2">
         Enable a text model above to use AI features.
       </p>
+    </div>
+
+    <!-- Token Usage Section -->
+    <div class="pt-4 border-t border-default">
+      <div class="mb-4">
+        <h2 class="text-lg font-semibold">Token Usage</h2>
+        <p class="text-sm text-muted">
+          Token usage across all conversations and generations.
+        </p>
+      </div>
+
+      <!-- Loading State -->
+      <div v-if="usagePending" class="flex items-center gap-2 text-muted">
+        <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
+        <span class="text-sm">Loading usage data...</span>
+      </div>
+
+      <!-- Empty State -->
+      <div v-else-if="!usageData?.totals?.totalTokens" class="text-sm text-muted italic">
+        No token usage recorded yet. Start a conversation to track usage.
+      </div>
+
+      <!-- Usage Summary -->
+      <div v-else class="space-y-4">
+        <!-- Totals -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div class="p-3 rounded-lg bg-elevated">
+            <p class="text-xs text-muted uppercase tracking-wide">Total Tokens</p>
+            <p class="text-xl font-semibold mt-1">{{ formatTokenCount(usageData.totals.totalTokens) }}</p>
+          </div>
+          <div class="p-3 rounded-lg bg-elevated">
+            <p class="text-xs text-muted uppercase tracking-wide">Prompt Tokens</p>
+            <p class="text-xl font-semibold mt-1">{{ formatTokenCount(usageData.totals.promptTokens) }}</p>
+          </div>
+          <div class="p-3 rounded-lg bg-elevated">
+            <p class="text-xs text-muted uppercase tracking-wide">Completion Tokens</p>
+            <p class="text-xl font-semibold mt-1">{{ formatTokenCount(usageData.totals.completionTokens) }}</p>
+          </div>
+          <div class="p-3 rounded-lg bg-elevated">
+            <p class="text-xs text-muted uppercase tracking-wide">Requests</p>
+            <p class="text-xl font-semibold mt-1">{{ usageData.totals.requestCount }}</p>
+          </div>
+        </div>
+
+        <!-- Compaction Info -->
+        <div v-if="usageData.totals.compactedCount > 0" class="flex items-center gap-2 text-sm text-muted">
+          <UIcon name="i-lucide-archive" class="size-4" />
+          <span>{{ usageData.totals.compactedCount }} conversation{{ usageData.totals.compactedCount === 1 ? '' : 's' }} used context compaction</span>
+        </div>
+
+        <!-- Usage by Model -->
+        <div v-if="usageData.usage?.length > 0">
+          <h3 class="text-sm font-medium text-muted mb-2">Usage by Model</h3>
+          <div class="space-y-2">
+            <div
+              v-for="usage in usageData.usage"
+              :key="`${usage.providerId}-${usage.modelId}`"
+              class="flex items-center justify-between p-3 rounded-lg bg-elevated"
+            >
+              <div>
+                <p class="font-medium">{{ usage.modelName }}</p>
+                <p class="text-xs text-muted">{{ usage.providerName }}</p>
+              </div>
+              <div class="text-right">
+                <p class="font-medium">{{ formatTokenCount(usage.totalTokens) }} tokens</p>
+                <p class="text-xs text-muted">{{ usage.requestCount }} request{{ usage.requestCount === 1 ? '' : 's' }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 

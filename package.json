@@ -81,6 +81,7 @@
     "pdf-parse": "^2.4.5",
     "replicate": "^1.4.0",
     "scorm-again": "^3.0.1",
+    "tiktoken": "^1.0.22",
     "zod": "^4.3.6"
   }
 }
