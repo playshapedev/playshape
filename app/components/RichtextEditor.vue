@@ -37,7 +37,7 @@ watch(content, (val) => {
   <div class="richtext-editor border border-default rounded-md focus-within:ring-2 focus-within:ring-primary/50 focus-within:border-primary transition-colors">
     <UEditor
       v-model="content"
-      content-type="html"
+      content-type="markdown"
       :placeholder="placeholder"
       class="min-h-[100px]"
     >

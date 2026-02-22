@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { marked } from 'marked'
 import type { Brand } from '~/composables/useBrands'
 import { COURSE_API_PREVIEW_SCRIPT } from '~/utils/courseApi/preview'
 
@@ -8,10 +9,18 @@ interface Dependency {
   global: string
 }
 
+interface InputField {
+  id: string
+  type: string
+  label: string
+  fields?: InputField[]
+}
+
 interface SlotContent {
   sfc: string
   data: Record<string, unknown>
   dependencies?: Dependency[]
+  inputSchema?: InputField[]
   name?: string
 }
 
@@ -20,11 +29,62 @@ const props = defineProps<{
   data: Record<string, unknown>
   dependencies?: Dependency[]
   tools?: string[]
+  /** Input schema for the template - used to identify textarea fields for markdown processing */
+  inputSchema?: InputField[]
   /** When provided, the component is treated as a wrapper — slotContent is rendered inside <slot name="activity"> */
   slotContent?: SlotContent | null
   /** When provided, overrides the design tokens in the preview iframe */
   brand?: Brand | null
 }>()
+
+// ─── Markdown Processing ─────────────────────────────────────────────────────
+
+/**
+ * Recursively process data, converting markdown to HTML for textarea fields.
+ * Handles nested objects and arrays based on the input schema.
+ */
+function processMarkdownFields(
+  data: Record<string, unknown>,
+  schema: InputField[] | undefined,
+): Record<string, unknown> {
+  if (!schema || !data) return data
+
+  const result = { ...data }
+
+  for (const field of schema) {
+    const value = result[field.id]
+
+    if (field.type === 'textarea' && typeof value === 'string' && value.trim()) {
+      // Convert markdown to HTML
+      result[field.id] = marked.parse(value, { async: false }) as string
+    }
+    else if (field.type === 'array' && Array.isArray(value) && field.fields) {
+      // Recursively process array items
+      result[field.id] = value.map(item =>
+        typeof item === 'object' && item !== null
+          ? processMarkdownFields(item as Record<string, unknown>, field.fields)
+          : item,
+      )
+    }
+  }
+
+  return result
+}
+
+/**
+ * Process the main data with markdown conversion for textarea fields.
+ */
+const processedData = computed(() => {
+  return processMarkdownFields(props.data, props.inputSchema)
+})
+
+/**
+ * Process slot content data with markdown conversion.
+ */
+const processedSlotData = computed(() => {
+  if (!props.slotContent?.data) return null
+  return processMarkdownFields(props.slotContent.data, props.slotContent.inputSchema)
+})
 
 const emit = defineEmits<{
   error: [message: string | null]
@@ -680,7 +740,8 @@ function buildUpdatePayload() {
     }
     slotContentPayload = {
       sfc: props.slotContent.sfc,
-      data: JSON.parse(JSON.stringify(props.slotContent.data)),
+      // Use processed slot data (markdown→HTML for textarea fields)
+      data: JSON.parse(JSON.stringify(processedSlotData.value ?? props.slotContent.data)),
       depMappings: slotDepMappings,
       name: props.slotContent.name || 'Activity',
     }
@@ -688,7 +749,8 @@ function buildUpdatePayload() {
   return {
     type: 'update' as const,
     sfc: props.componentSource,
-    data: JSON.parse(JSON.stringify(props.data)),
+    // Use processed data (markdown→HTML for textarea fields)
+    data: JSON.parse(JSON.stringify(processedData.value)),
     depMappings,
     slotContent: slotContentPayload,
   }
@@ -872,7 +934,8 @@ async function generateThumbnail(): Promise<string | null> {
     return await electron.generateThumbnail({
       srcdoc: iframeSrcdoc.value,
       sfc: props.componentSource,
-      data: JSON.parse(JSON.stringify(props.data)),
+      // Use processed data (markdown→HTML for textarea fields)
+      data: JSON.parse(JSON.stringify(processedData.value)),
       depMappings,
       brandCSS,
       brandFontLink,

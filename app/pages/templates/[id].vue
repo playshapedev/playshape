@@ -191,6 +191,7 @@ const slotContent = computed(() => {
     sfc: selectedActivity.value.component,
     data: (selectedActivity.value.sampleData as Record<string, unknown>) || {},
     dependencies: (selectedActivity.value.dependencies as Array<{ name: string; url: string; global: string }>) || [],
+    inputSchema: (selectedActivity.value.inputSchema as Array<{ id: string; type: string; label: string; fields?: unknown[] }>) || [],
     name: selectedActivity.value.name,
   }
 })
@@ -491,6 +492,7 @@ async function generateAndSaveThumbnail() {
         ref="templatePreviewRef"
         :component-source="template.component || ''"
         :data="formData"
+        :input-schema="inputFields"
         :dependencies="(template.dependencies as any[]) || []"
         :tools="(template.tools as string[]) || []"
         :slot-content="slotContent"

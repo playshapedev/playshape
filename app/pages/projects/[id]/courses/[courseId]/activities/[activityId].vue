@@ -451,6 +451,7 @@ watch(formData, () => {
       <TemplatePreview
         :component-source="componentSource"
         :data="previewData"
+        :input-schema="inputFields"
         :dependencies="dependencies"
         :tools="tools"
         :brand="selectedBrand"

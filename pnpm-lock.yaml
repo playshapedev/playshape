@@ -80,6 +80,9 @@ importers:
       mammoth:
         specifier: ^1.11.0
         version: 1.11.0
+      marked:
+        specifier: ^17.0.3
+        version: 17.0.3
       ollama-ai-provider-v2:
         specifier: ^3.3.0
         version: 3.3.0(ai@6.0.86(zod@4.3.6))(zod@4.3.6)
@@ -5421,8 +5424,8 @@ packages:
     engines: {node: '>= 18'}
     hasBin: true
 
-  marked@17.0.2:
-    resolution: {integrity: sha512-s5HZGFQea7Huv5zZcAGhJLT3qLpAfnY7v7GWkICUr0+Wd5TFEtdlRR2XUL5Gg+RH7u2Df595ifrxR03mBaw7gA==}
+  marked@17.0.3:
+    resolution: {integrity: sha512-jt1v2ObpyOKR8p4XaUJVk3YWRJ5n+i4+rjQopxvV32rSndTJXvIzuUdWWIy/1pFQMkQmvTXawzDNqOH/CUmx6A==}
     engines: {node: '>= 20'}
     hasBin: true
 
@@ -10238,7 +10241,7 @@ snapshots:
     dependencies:
       '@tiptap/core': 3.19.0(@tiptap/pm@3.19.0)
       '@tiptap/pm': 3.19.0
-      marked: 17.0.2
+      marked: 17.0.3
 
   '@tiptap/pm@3.19.0':
     dependencies:
@@ -13484,7 +13487,7 @@ snapshots:
 
   marked@14.0.0: {}
 
-  marked@17.0.2: {}
+  marked@17.0.3: {}
 
   matcher@3.0.0:
     dependencies:
