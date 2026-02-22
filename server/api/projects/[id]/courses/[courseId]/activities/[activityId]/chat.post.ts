@@ -99,12 +99,19 @@ export default defineLazyEventHandler(() => {
         ask_question: askQuestionTool,
 
         get_template: tool({
-          description: 'Retrieve the activity template\'s input schema (field definitions), the activity\'s current data, and the component source. Call this to understand what fields need to be filled in.',
+          description: 'Retrieve the activity template\'s input schema (field definitions), the activity\'s current data, and the component source. Call this to understand what fields need to be filled in. ALWAYS call this before making updates.',
           inputSchema: z.object({}),
           execute: async () => {
             // Re-fetch to get latest state
             const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
             const currentTmpl = db.select().from(templates).where(eq(templates.id, activity.templateId)).get()
+
+            // Update last read timestamp for stale context detection
+            db.update(activities)
+              .set({ dataLastReadAt: new Date() })
+              .where(eq(activities.id, activityId))
+              .run()
+
             return {
               activityName: current?.name,
               activityDescription: current?.description,
@@ -118,7 +125,7 @@ export default defineLazyEventHandler(() => {
         }),
 
         update_activity: tool({
-          description: 'Update the activity\'s data fields. Provide a data object with field values matching the template\'s input schema. Fields you include will replace existing values. You can also update the activity name and description.',
+          description: 'Update the activity\'s data fields. Provide a data object with field values matching the template\'s input schema. Fields you include will replace existing values. You can also update the activity name and description. You MUST call get_template first to read the current state.',
           inputSchema: z.object({
             data: z.record(z.string(), z.unknown()).optional().describe('Activity data fields. Keys must match the field IDs from the template\'s input schema.'),
             name: z.string().optional().describe('Updated activity name'),
@@ -128,8 +135,26 @@ export default defineLazyEventHandler(() => {
             const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
             if (!current) return { success: false, error: 'Activity not found' }
 
+            // Check for stale context (only if there was a previous modification)
+            if (current.dataLastModifiedAt) {
+              const lastMod = current.dataLastModifiedAt.getTime()
+              const lastRead = current.dataLastReadAt?.getTime() ?? 0
+
+              if (lastMod > lastRead) {
+                return {
+                  success: false,
+                  error: `Activity data has been modified since it was last read.\n`
+                    + `Last modification: ${current.dataLastModifiedAt.toISOString()}\n`
+                    + `Last read: ${current.dataLastReadAt?.toISOString() ?? 'never'}\n\n`
+                    + `Please call get_template to read the current state before making changes.`,
+                }
+              }
+            }
+
             const updatePayload: Record<string, unknown> = {
               updatedAt: new Date(),
+              dataLastModifiedAt: new Date(),
+              dataLastReadAt: null, // Force re-read before next modification
             }
 
             if (newData) {

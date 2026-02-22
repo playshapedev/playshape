@@ -66,6 +66,9 @@ export const activities = sqliteTable('activities', {
   data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
   messages: text('messages', { mode: 'json' }).$type<TemplateMessage[]>(),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Stale context detection for AI chat
+  dataLastReadAt: integer('data_last_read_at', { mode: 'timestamp_ms' }),
+  dataLastModifiedAt: integer('data_last_modified_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -83,24 +86,40 @@ export const libraries = sqliteTable('libraries', {
 })
 
 // ─── Documents ───────────────────────────────────────────────────────────────
-// Source content within a library — uploaded files or pasted text. The `body`
-// column stores the extracted plain text; original files are stored on disk.
+// Source content within a library — uploaded files, pasted text, or AI-generated.
+// The `body` column stores the content (plain text or markdown); original files
+// are stored on disk.
 
 export const documents = sqliteTable('documents', {
   id: text('id').primaryKey(),
   libraryId: text('library_id').notNull().references(() => libraries.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
-  sourceType: text('source_type').notNull(), // 'text', 'pdf', 'docx', 'pptx', 'txt'
+  sourceType: text('source_type').notNull(), // 'text', 'pdf', 'docx', 'pptx', 'txt', 'generated'
   sourceFilename: text('source_filename'), // original filename for file uploads
   mimeType: text('mime_type'), // MIME type of the original file
   fileSize: integer('file_size'), // size in bytes
-  body: text('body').notNull().default(''), // extracted plain text content
+  body: text('body').notNull().default(''), // content (plain text or markdown for generated)
   summary: text('summary'), // AI-generated summary of the document content
   status: text('status').notNull().default('processing'), // 'processing', 'ready', 'error'
   error: text('error'), // error message if extraction failed
+  // Chat history for AI-generated documents
+  messages: text('messages', { mode: 'json' }).$type<DocumentMessage[]>(),
+  // Timestamps for stale context detection (AI-generated documents only)
+  contentLastReadAt: integer('content_last_read_at', { mode: 'timestamp_ms' }),
+  contentLastModifiedAt: integer('content_last_modified_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
+
+export interface DocumentMessage {
+  role: 'user' | 'assistant'
+  content: string
+  toolInvocations?: Array<{
+    toolName: string
+    args: Record<string, unknown>
+    result?: unknown
+  }>
+}
 
 // ─── Document Chunks ─────────────────────────────────────────────────────────
 // Paragraph-level chunks of document text for embedding and semantic search.
@@ -239,6 +258,9 @@ export const templates = sqliteTable('templates', {
   // Base64-encoded PNG thumbnail captured from an offscreen Electron BrowserWindow
   thumbnail: text('thumbnail'),
   status: text('status').notNull().default('draft'), // 'draft' | 'published'
+  // Timestamps for stale context detection — prevents LLM from patching with outdated context
+  componentLastReadAt: integer('component_last_read_at', { mode: 'timestamp_ms' }),
+  componentLastModifiedAt: integer('component_last_modified_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })

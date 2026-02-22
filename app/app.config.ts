@@ -4,6 +4,11 @@ export default defineAppConfig({
       primary: 'playshape',
       neutral: 'slate',
     },
+    toaster: {
+      defaultVariants: {
+        position: 'top-center' as const,
+      },
+    },
     dashboardGroup: {
       base: 'dashboard-root',
     },

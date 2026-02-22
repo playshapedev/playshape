@@ -24,7 +24,8 @@ const EXT_TO_SOURCE_TYPE: Record<string, string> = {
 
 const textDocumentSchema = z.object({
   title: z.string().min(1, 'Title is required'),
-  content: z.string().min(1, 'Content is required'),
+  content: z.string(),
+  sourceType: z.enum(['text', 'generated']).optional().default('text'),
 })
 
 export default defineEventHandler(async (event) => {
@@ -43,10 +44,17 @@ export default defineEventHandler(async (event) => {
 
   const contentType = getRequestHeader(event, 'content-type') || ''
 
-  // Handle JSON body (plain text paste)
+  // Handle JSON body (plain text paste or AI-generated document)
   if (contentType.includes('application/json')) {
     const body = await readBody(event)
     const parsed = textDocumentSchema.parse(body)
+
+    // For generated documents, create an empty shell (no cleanup, no chunking)
+    if (parsed.sourceType === 'generated') {
+      return await createGeneratedDocument(db, libraryId, parsed.title)
+    }
+
+    // For pasted text, run cleanup and chunking
     return await processTextDocument(db, libraryId, parsed.title, parsed.content)
   }
 
@@ -77,6 +85,31 @@ export default defineEventHandler(async (event) => {
 
   throw createError({ statusCode: 400, statusMessage: 'Invalid content type' })
 })
+
+/**
+ * Creates an empty document shell for AI generation.
+ */
+async function createGeneratedDocument(
+  db: ReturnType<typeof useDb>,
+  libraryId: string,
+  title: string,
+) {
+  const now = new Date()
+  const id = crypto.randomUUID()
+
+  db.insert(documents).values({
+    id,
+    libraryId,
+    title,
+    sourceType: 'generated',
+    body: '',
+    status: 'ready',
+    createdAt: now,
+    updatedAt: now,
+  }).run()
+
+  return db.select().from(documents).where(eq(documents.id, id)).get()
+}
 
 /**
  * Creates a document from pasted text content.

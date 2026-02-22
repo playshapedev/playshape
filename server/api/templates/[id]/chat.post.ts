@@ -89,6 +89,13 @@ export default defineLazyEventHandler(() => {
           execute: async () => {
             const current = db.select().from(templates).where(eq(templates.id, id)).get()
             if (!current) return { error: 'Template not found' }
+
+            // Update last read timestamp for stale context detection
+            db.update(templates)
+              .set({ componentLastReadAt: new Date() })
+              .where(eq(templates.id, id))
+              .run()
+
             return {
               name: current.name,
               description: current.description,
@@ -120,6 +127,25 @@ export default defineLazyEventHandler(() => {
             tools: z.array(z.enum(['code-editor'])).optional().describe('Activity tools to enable. Use "code-editor" to provide Monaco Editor (VS Code editor) — REQUIRED for any template that needs a code editor.'),
           }),
           execute: async ({ fields, component, sampleData, dependencies, tools: toolIds }) => {
+            // Check for stale context (only if there was a previous modification)
+            const current = db.select().from(templates).where(eq(templates.id, id)).get()
+            if (!current) return { success: false, error: 'Template not found' }
+
+            if (current.componentLastModifiedAt) {
+              const lastMod = current.componentLastModifiedAt.getTime()
+              const lastRead = current.componentLastReadAt?.getTime() ?? 0
+
+              if (lastMod > lastRead) {
+                return {
+                  success: false,
+                  error: `Template component has been modified since it was last read.\n`
+                    + `Last modification: ${current.componentLastModifiedAt.toISOString()}\n`
+                    + `Last read: ${current.componentLastReadAt?.toISOString() ?? 'never'}\n\n`
+                    + `Please call get_template to read the current state before making changes.`,
+                }
+              }
+            }
+
             // Persist the template update to the database
             db.update(templates)
               .set({
@@ -128,6 +154,8 @@ export default defineLazyEventHandler(() => {
                 sampleData,
                 dependencies: (dependencies as TemplateDependency[]) || [],
                 tools: toolIds || [],
+                componentLastModifiedAt: new Date(),
+                componentLastReadAt: null, // Force re-read before next modification
                 updatedAt: new Date(),
               })
               .where(eq(templates.id, id))
@@ -157,6 +185,22 @@ export default defineLazyEventHandler(() => {
             const current = db.select().from(templates).where(eq(templates.id, id)).get()
             if (!current?.component) {
               return { success: false, error: 'No existing component to patch. Use update_template to create the initial template.' }
+            }
+
+            // Check for stale context (only if there was a previous modification)
+            if (current.componentLastModifiedAt) {
+              const lastMod = current.componentLastModifiedAt.getTime()
+              const lastRead = current.componentLastReadAt?.getTime() ?? 0
+
+              if (lastMod > lastRead) {
+                return {
+                  success: false,
+                  error: `Template component has been modified since it was last read.\n`
+                    + `Last modification: ${current.componentLastModifiedAt.toISOString()}\n`
+                    + `Last read: ${current.componentLastReadAt?.toISOString() ?? 'never'}\n\n`
+                    + `Please call get_template to read the current state before making changes.`,
+                }
+              }
             }
 
             let patched = current.component
@@ -191,6 +235,8 @@ export default defineLazyEventHandler(() => {
             // Build the update payload — only include fields that were provided
             const updatePayload: Record<string, unknown> = {
               component: patched,
+              componentLastModifiedAt: new Date(),
+              componentLastReadAt: null, // Force re-read before next modification
               updatedAt: new Date(),
             }
             if (fields) updatePayload.inputSchema = fields as TemplateField[]

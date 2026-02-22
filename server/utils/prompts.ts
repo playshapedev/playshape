@@ -74,3 +74,19 @@ export async function useActivityEditorPrompt(): Promise<string> {
   activityEditorCache = content
   return content
 }
+
+/**
+ * Load the document generation system prompt (for AI-generated library documents).
+ */
+let documentGenerationCache: string | null = null
+
+export async function useDocumentGenerationPrompt(): Promise<string> {
+  if (documentGenerationCache) return documentGenerationCache
+
+  const storage = useStorage('assets:prompts')
+  const content = await storage.getItem<string>('document-generation.md')
+  if (!content) throw new Error('Prompt file not found in server assets: document-generation.md')
+
+  documentGenerationCache = content
+  return content
+}

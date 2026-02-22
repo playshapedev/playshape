@@ -148,6 +148,9 @@ const input = ref('')
 const customAnswer = ref('')
 const showCustomInput = ref(false)
 const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
+
+// Arrow key navigation for question options
+const selectedOptionIndex = ref(0)
 const messagesContainer = ref<HTMLElement | null>(null)
 
 /**
@@ -175,7 +178,12 @@ const pendingQuestion = computed(() => {
   return null
 })
 
-// Keyboard shortcuts for question buttons (1-9) and Escape to stop
+// Reset selection when question changes
+watch(pendingQuestion, () => {
+  selectedOptionIndex.value = 0
+})
+
+// Keyboard shortcuts for question buttons (1-9, arrows, enter) and Escape to stop
 function onKeyDown(e: KeyboardEvent) {
   // Escape stops generation
   if (e.key === 'Escape' && isRunning.value) {
@@ -185,8 +193,36 @@ function onKeyDown(e: KeyboardEvent) {
   }
 
   if (!pendingQuestion.value || chat.status === 'streaming' || showCustomInput.value) return
-  const num = parseInt(e.key)
+
   const totalOptions = pendingQuestion.value.options.length + 1 // +1 for "Type answer"
+
+  // Arrow key navigation
+  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    selectedOptionIndex.value = (selectedOptionIndex.value + 1) % totalOptions
+    return
+  }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+    e.preventDefault()
+    selectedOptionIndex.value = (selectedOptionIndex.value - 1 + totalOptions) % totalOptions
+    return
+  }
+
+  // Enter selects the highlighted option
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    if (selectedOptionIndex.value < pendingQuestion.value.options.length) {
+      const option = pendingQuestion.value.options[selectedOptionIndex.value]!
+      handleAnswer(option.value)
+    }
+    else {
+      openCustomInput()
+    }
+    return
+  }
+
+  // Number keys (1-9) for direct selection
+  const num = parseInt(e.key)
   if (num >= 1 && num <= totalOptions) {
     e.preventDefault()
     if (num <= pendingQuestion.value.options.length) {
@@ -482,8 +518,8 @@ watch(() => visibleMessages.value.length, (count) => {
               : ''"
           >
               <template v-for="(part, i) in msg.parts" :key="`${msg.id}-${part.type}-${i}`">
-                <!-- Text -->
-                <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
+                <!-- Text (trim to prevent leading whitespace being interpreted as code blocks) -->
+                <MDC v-if="part.type === 'text' && msg.role === 'assistant'" :value="(part as any).text.trim()" :cache-key="`${msg.id}-${i}`" class="chat-prose *:first:mt-0 *:last:mb-0" />
                 <p v-else-if="part.type === 'text'" class="whitespace-pre-wrap">{{ (part as any).text }}</p>
 
                 <!-- Attached image -->
@@ -627,14 +663,17 @@ watch(() => visibleMessages.value.length, (count) => {
     </div>
 
     <!-- Question buttons (replaces input when AI asks a question) -->
-    <div v-if="pendingQuestion" class="border-t border-default p-4 space-y-3">
-      <p class="text-sm font-medium">{{ pendingQuestion.question }}</p>
-      <div class="flex flex-wrap gap-2">
+    <div v-if="pendingQuestion" class="border-t border-default p-3 space-y-2 font-mono">
+      <p class="text-sm">{{ pendingQuestion.question }}</p>
+      <div class="flex flex-wrap gap-1.5">
         <UButton
           v-for="(option, index) in pendingQuestion.options"
           :key="option.value"
           variant="soft"
           color="neutral"
+          size="sm"
+          :class="selectedOptionIndex === index ? 'bg-accented/75' : ''"
+          class="hover:text-primary hover:bg-primary/10"
           :disabled="showCustomInput"
           @click="handleAnswer(option.value)"
         >
@@ -643,7 +682,10 @@ watch(() => visibleMessages.value.length, (count) => {
         </UButton>
         <UButton
           variant="soft"
-          color="primary"
+          color="neutral"
+          size="sm"
+          :class="selectedOptionIndex === pendingQuestion.options.length ? 'bg-accented/75' : ''"
+          class="hover:text-primary hover:bg-primary/10"
           :disabled="showCustomInput"
           @click="openCustomInput"
         >
@@ -710,7 +752,7 @@ watch(() => visibleMessages.value.length, (count) => {
       </div>
 
       <!-- Input row -->
-      <div class="flex items-end gap-2">
+      <div class="flex items-end gap-2 pl-3 border-l-2 border-primary bg-primary/5 rounded-r-lg">
         <!-- Hidden file input -->
         <input
           ref="fileInputRef"
@@ -726,14 +768,17 @@ watch(() => visibleMessages.value.length, (count) => {
           icon="i-lucide-paperclip"
           variant="ghost"
           color="neutral"
+          size="sm"
           :disabled="isRunning || isUploading"
+          class="mb-1"
           @click="openFilePicker"
         />
 
         <UTextarea
           v-model="input"
           :placeholder="placeholder"
-          class="flex-1"
+          class="flex-1 font-mono text-sm"
+          variant="none"
           autoresize
           :rows="1"
           :maxrows="6"
@@ -741,21 +786,25 @@ watch(() => visibleMessages.value.length, (count) => {
           @keydown.enter.exact.prevent="handleSend"
           @keydown.escape="isRunning && stopGeneration()"
         />
-        <!-- Stop button while running -->
-        <UButton
-          v-if="isRunning"
-          icon="i-lucide-square"
-          color="error"
-          variant="soft"
-          @click="stopGeneration"
-        />
-        <!-- Send button when ready -->
-        <UButton
-          v-else
-          icon="i-lucide-send"
-          :disabled="(!input.trim() && !hasPending) || isUploading"
-          @click="handleSend"
-        />
+        <div class="flex items-end py-1 pr-1">
+          <!-- Stop button while running -->
+          <UButton
+            v-if="isRunning"
+            icon="i-lucide-square"
+            color="error"
+            variant="soft"
+            size="sm"
+            @click="stopGeneration"
+          />
+          <!-- Send button when ready -->
+          <UButton
+            v-else
+            icon="i-lucide-send"
+            size="sm"
+            :disabled="(!input.trim() && !hasPending) || isUploading"
+            @click="handleSend"
+          />
+        </div>
       </div>
       <p class="text-xs text-muted">
         Paste or attach images to include as reference.

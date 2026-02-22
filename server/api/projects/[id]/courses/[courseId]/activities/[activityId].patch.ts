@@ -41,11 +41,25 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Activity not found in this course' })
   }
 
+  const updatePayload: Record<string, unknown> = {
+    ...parsed,
+    updatedAt: new Date(),
+  }
+
+  // Track data modification for stale context detection
+  if (parsed.data !== undefined) {
+    updatePayload.dataLastModifiedAt = new Date()
+    updatePayload.dataLastReadAt = null // Force re-read in chat
+  }
+
+  // If clearing messages, also reset stale context timestamps
+  if (Array.isArray(parsed.messages) && parsed.messages.length === 0) {
+    updatePayload.dataLastReadAt = null
+    updatePayload.dataLastModifiedAt = null
+  }
+
   db.update(activities)
-    .set({
-      ...parsed,
-      updatedAt: new Date(),
-    })
+    .set(updatePayload)
     .where(eq(activities.id, activityId))
     .run()
 

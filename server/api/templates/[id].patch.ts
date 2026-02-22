@@ -32,11 +32,20 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Template not found' })
   }
 
+  // If messages are being cleared, also reset the stale context timestamps
+  // since the LLM loses context of previous get_template reads
+  const updatePayload: Record<string, unknown> = {
+    ...parsed,
+    updatedAt: new Date(),
+  }
+
+  if (Array.isArray(parsed.messages) && parsed.messages.length === 0) {
+    updatePayload.componentLastReadAt = null
+    updatePayload.componentLastModifiedAt = null
+  }
+
   db.update(templates)
-    .set({
-      ...parsed,
-      updatedAt: new Date(),
-    })
+    .set(updatePayload)
     .where(eq(templates.id, id))
     .run()
 

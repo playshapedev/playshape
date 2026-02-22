@@ -69,6 +69,33 @@ export async function deleteDocument(libraryId: string, documentId: string) {
   })
 }
 
+export function useDocument(libraryId: MaybeRef<string>, documentId: MaybeRef<string>) {
+  const libId = toRef(libraryId)
+  const docId = toRef(documentId)
+  const { data, pending, error, refresh } = useFetch<Document>(
+    () => `/api/libraries/${libId.value}/documents/${docId.value}`,
+  )
+  return { document: data, pending, error, refresh }
+}
+
+export async function createGeneratedDocument(libraryId: string) {
+  return $fetch<Document>(`/api/libraries/${libraryId}/documents`, {
+    method: 'POST',
+    body: {
+      title: 'Untitled Document',
+      content: '',
+      sourceType: 'generated',
+    },
+  })
+}
+
+export async function embedDocument(libraryId: string, documentId: string) {
+  return $fetch<{ success: boolean; chunksCreated?: number; skipped?: boolean; reason?: string }>(
+    `/api/libraries/${libraryId}/documents/${documentId}/embed`,
+    { method: 'POST' },
+  )
+}
+
 // ─── Semantic Search ─────────────────────────────────────────────────────────
 
 export interface SearchResult {

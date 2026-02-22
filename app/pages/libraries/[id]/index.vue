@@ -170,6 +170,28 @@ function onDrop(event: DragEvent) {
   }
 }
 
+// ─── AI Document Generation ──────────────────────────────────────────────────
+
+const generatingDoc = ref(false)
+
+async function handleGenerateDocument() {
+  generatingDoc.value = true
+  try {
+    const doc = await createGeneratedDocument(libraryId)
+    if (!doc?.id) {
+      toast.add({ title: 'Failed to create document', description: 'No document ID returned', color: 'error' })
+      generatingDoc.value = false
+      return
+    }
+    await navigateTo(`/libraries/${libraryId}/generate/${doc.id}`)
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to create document', description: message, color: 'error' })
+    generatingDoc.value = false
+  }
+}
+
 // ─── Text paste ──────────────────────────────────────────────────────────────
 
 const showTextModal = ref(false)
@@ -283,6 +305,7 @@ function sourceTypeIcon(sourceType: string): string {
     case 'pptx': return 'i-lucide-presentation'
     case 'txt': return 'i-lucide-file'
     case 'text': return 'i-lucide-text'
+    case 'generated': return 'i-lucide-sparkles'
     default: return 'i-lucide-file'
   }
 }
@@ -294,6 +317,7 @@ function sourceTypeLabel(sourceType: string): string {
     case 'pptx': return 'PowerPoint'
     case 'txt': return 'Text file'
     case 'text': return 'Pasted text'
+    case 'generated': return 'AI Generated'
     default: return sourceType.toUpperCase()
   }
 }
@@ -380,7 +404,7 @@ function formatFileSize(bytes: number | null): string {
             icon="i-lucide-folder-open"
             variant="soft"
             size="sm"
-            :disabled="isUploading"
+            :disabled="isUploading || generatingDoc"
             @click="($refs.fileInput as HTMLInputElement).click()"
           />
           <UButton
@@ -389,8 +413,18 @@ function formatFileSize(bytes: number | null): string {
             variant="soft"
             color="neutral"
             size="sm"
-            :disabled="isUploading"
+            :disabled="isUploading || generatingDoc"
             @click="showTextModal = true"
+          />
+          <UButton
+            label="Generate with AI"
+            icon="i-lucide-sparkles"
+            variant="soft"
+            color="primary"
+            size="sm"
+            :loading="generatingDoc"
+            :disabled="isUploading"
+            @click="handleGenerateDocument"
           />
         </div>
       </div>
@@ -558,12 +592,43 @@ function formatFileSize(bytes: number | null): string {
           class="flex items-center gap-3 py-3 group"
         >
           <!-- Type icon -->
-          <div class="shrink-0 rounded-md bg-muted/10 p-2">
-            <UIcon :name="sourceTypeIcon(doc.sourceType)" class="size-5 text-muted" />
+          <div class="shrink-0 rounded-md bg-muted/10 p-2" :class="doc.sourceType === 'generated' ? 'bg-primary/10' : ''">
+            <UIcon :name="sourceTypeIcon(doc.sourceType)" class="size-5" :class="doc.sourceType === 'generated' ? 'text-primary' : 'text-muted'" />
           </div>
 
           <!-- Info -->
+          <NuxtLink
+            v-if="doc.sourceType === 'generated'"
+            class="flex-1 min-w-0 cursor-pointer"
+            :to="`/libraries/${libraryId}/generate/${doc.id}`"
+          >
+            <p class="font-medium text-highlighted truncate">
+              {{ doc.title }}
+            </p>
+            <p v-if="doc.summary" class="text-sm text-muted line-clamp-2 mt-0.5">
+              {{ doc.summary }}
+            </p>
+            <div class="flex items-center gap-2 text-xs text-dimmed mt-1">
+              <UBadge
+                label="Generated"
+                color="primary"
+                size="xs"
+                variant="subtle"
+              />
+              <UBadge
+                v-if="doc.status !== 'ready'"
+                :label="doc.status"
+                :color="statusColor(doc.status)"
+                size="xs"
+                variant="subtle"
+              />
+              <span v-if="doc.error" class="text-error truncate max-w-48">
+                {{ doc.error }}
+              </span>
+            </div>
+          </NuxtLink>
           <div
+            v-else
             class="flex-1 min-w-0 cursor-pointer"
             @click="openPreview(doc)"
           >
@@ -577,6 +642,7 @@ function formatFileSize(bytes: number | null): string {
               <span>{{ sourceTypeLabel(doc.sourceType) }}</span>
               <span v-if="doc.fileSize">{{ formatFileSize(doc.fileSize) }}</span>
               <UBadge
+                v-if="doc.status !== 'ready'"
                 :label="doc.status"
                 :color="statusColor(doc.status)"
                 size="xs"
@@ -589,6 +655,15 @@ function formatFileSize(bytes: number | null): string {
           </div>
 
           <!-- Actions -->
+          <UButton
+            v-if="doc.sourceType === 'generated'"
+            icon="i-lucide-pencil"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            class="opacity-0 group-hover:opacity-100 transition-opacity"
+            :to="`/libraries/${libraryId}/generate/${doc.id}`"
+          />
           <UButton
             icon="i-lucide-trash-2"
             color="error"
