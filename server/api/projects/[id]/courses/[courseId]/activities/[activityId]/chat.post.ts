@@ -6,7 +6,7 @@ import { activities, templates, templateVersions, courseSections, courses, proje
 import type { TemplateField } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { compactContext } from '~~/server/utils/contextCompaction'
-import { recordTokenUsage } from '~~/server/utils/tokens'
+import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { checkHtmlInSampleData } from '~~/server/utils/templateValidation'
 import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
@@ -37,7 +37,7 @@ export default defineLazyEventHandler(() => {
         const p = part as Record<string, unknown>
         if (p.type === 'tool-ask_question' && p.state !== 'output-available') {
           p.state = 'output-available'
-          p.output = p.output ?? { answered: true }
+          p.output = p.output ?? { answered: true, answers: {} }
         }
       }
     }
@@ -359,6 +359,8 @@ export default defineLazyEventHandler(() => {
             totalTokens: promptTokens + completionTokens,
             wasCompacted: compaction.wasCompacted,
           })
+          // Increment cumulative token counters on the activity
+          incrementEntityTokens('activity', activityId, promptTokens, completionTokens)
         }
       },
     })

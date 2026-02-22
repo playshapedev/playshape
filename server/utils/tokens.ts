@@ -1,6 +1,7 @@
 import { get_encoding } from 'tiktoken'
 import type { ModelMessage } from 'ai'
-import { tokenUsage, type TokenUsageEntityType } from '../database/schema'
+import { sql, eq } from 'drizzle-orm'
+import { tokenUsage, templates, documents, assets, activities, type TokenUsageEntityType } from '../database/schema'
 import { useDb } from './db'
 
 // Cache the encoder - reuse across calls for performance
@@ -108,4 +109,64 @@ export function formatTokenCount(count: number): string {
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`
   if (count < 1000000) return `${Math.round(count / 1000)}k`
   return `${(count / 1000000).toFixed(1)}M`
+}
+
+/**
+ * Increment token usage counters on an entity (template, document, asset, activity).
+ * This accumulates token usage on the entity itself for persistence across sessions.
+ */
+export function incrementEntityTokens(
+  entityType: TokenUsageEntityType,
+  entityId: string,
+  promptTokens: number,
+  completionTokens: number,
+): void {
+  const db = useDb()
+  const totalTokens = promptTokens + completionTokens
+
+  switch (entityType) {
+    case 'template':
+      db.update(templates)
+        .set({
+          totalPromptTokens: sql`${templates.totalPromptTokens} + ${promptTokens}`,
+          totalCompletionTokens: sql`${templates.totalCompletionTokens} + ${completionTokens}`,
+          totalTokens: sql`${templates.totalTokens} + ${totalTokens}`,
+        })
+        .where(eq(templates.id, entityId))
+        .run()
+      break
+
+    case 'document':
+      db.update(documents)
+        .set({
+          totalPromptTokens: sql`${documents.totalPromptTokens} + ${promptTokens}`,
+          totalCompletionTokens: sql`${documents.totalCompletionTokens} + ${completionTokens}`,
+          totalTokens: sql`${documents.totalTokens} + ${totalTokens}`,
+        })
+        .where(eq(documents.id, entityId))
+        .run()
+      break
+
+    case 'asset':
+      db.update(assets)
+        .set({
+          totalPromptTokens: sql`${assets.totalPromptTokens} + ${promptTokens}`,
+          totalCompletionTokens: sql`${assets.totalCompletionTokens} + ${completionTokens}`,
+          totalTokens: sql`${assets.totalTokens} + ${totalTokens}`,
+        })
+        .where(eq(assets.id, entityId))
+        .run()
+      break
+
+    case 'activity':
+      db.update(activities)
+        .set({
+          totalPromptTokens: sql`${activities.totalPromptTokens} + ${promptTokens}`,
+          totalCompletionTokens: sql`${activities.totalCompletionTokens} + ${completionTokens}`,
+          totalTokens: sql`${activities.totalTokens} + ${totalTokens}`,
+        })
+        .where(eq(activities.id, entityId))
+        .run()
+      break
+  }
 }

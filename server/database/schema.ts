@@ -73,6 +73,10 @@ export const activities = sqliteTable('activities', {
   // Stale context detection for AI chat
   dataLastReadAt: integer('data_last_read_at', { mode: 'timestamp_ms' }),
   dataLastModifiedAt: integer('data_last_modified_at', { mode: 'timestamp_ms' }),
+  // Cumulative token usage for chat conversations
+  totalPromptTokens: integer('total_prompt_tokens').notNull().default(0),
+  totalCompletionTokens: integer('total_completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -111,6 +115,10 @@ export const documents = sqliteTable('documents', {
   // Timestamps for stale context detection (AI-generated documents only)
   contentLastReadAt: integer('content_last_read_at', { mode: 'timestamp_ms' }),
   contentLastModifiedAt: integer('content_last_modified_at', { mode: 'timestamp_ms' }),
+  // Cumulative token usage for chat conversations
+  totalPromptTokens: integer('total_prompt_tokens').notNull().default(0),
+  totalCompletionTokens: integer('total_completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -267,6 +275,10 @@ export const templates = sqliteTable('templates', {
   // Timestamps for stale context detection — prevents LLM from patching with outdated context
   componentLastReadAt: integer('component_last_read_at', { mode: 'timestamp_ms' }),
   componentLastModifiedAt: integer('component_last_modified_at', { mode: 'timestamp_ms' }),
+  // Cumulative token usage for chat conversations
+  totalPromptTokens: integer('total_prompt_tokens').notNull().default(0),
+  totalCompletionTokens: integer('total_completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -400,6 +412,10 @@ export const assets = sqliteTable('assets', {
   type: text('type').$type<AssetType>().notNull().default('image'),
   name: text('name').notNull(),
   messages: text('messages', { mode: 'json' }).$type<AssetMessage[]>().default([]),
+  // Cumulative token usage for chat conversations
+  totalPromptTokens: integer('total_prompt_tokens').notNull().default(0),
+  totalCompletionTokens: integer('total_completion_tokens').notNull().default(0),
+  totalTokens: integer('total_tokens').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })

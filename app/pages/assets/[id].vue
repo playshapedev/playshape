@@ -160,6 +160,11 @@ function onResizeStart(e: PointerEvent) {
           :key="chatKey"
           :asset-id="assetId"
           :initial-messages="initialMessages"
+          :initial-token-usage="{
+            totalTokens: asset.totalTokens,
+            promptTokens: asset.totalPromptTokens,
+            completionTokens: asset.totalCompletionTokens,
+          }"
           @update="refresh"
         />
       </div>

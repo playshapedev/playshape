@@ -472,6 +472,11 @@ async function generateAndSaveThumbnail() {
         ref="templateChatRef"
         :template-id="template.id"
         :initial-messages="initialChatMessages"
+        :initial-token-usage="{
+          totalTokens: template.totalTokens,
+          promptTokens: template.totalPromptTokens,
+          completionTokens: template.totalCompletionTokens,
+        }"
         @update="onTemplateUpdated"
       />
     </div>

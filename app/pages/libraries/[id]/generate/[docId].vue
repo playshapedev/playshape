@@ -255,6 +255,11 @@ onUnmounted(() => {
         :library-id="libraryId"
         :document-id="documentId"
         :initial-messages="initialChatMessages"
+        :initial-token-usage="{
+          totalTokens: doc.totalTokens,
+          promptTokens: doc.totalPromptTokens,
+          completionTokens: doc.totalCompletionTokens,
+        }"
         @update="onDocumentUpdate"
       />
     </div>

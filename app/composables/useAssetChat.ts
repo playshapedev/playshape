@@ -13,6 +13,13 @@ export interface TokenUsageMetadata {
   compactionMessage?: string
 }
 
+/** Initial token usage values to hydrate from persisted entity data */
+export interface InitialTokenUsage {
+  totalTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+}
+
 /**
  * Creates a Chat instance for an asset's AI image generation conversation.
  *
@@ -24,6 +31,7 @@ export interface TokenUsageMetadata {
  * @param modelId - Optional reactive ref to the model ID to use for generation
  * @param aspectRatio - Optional reactive ref to the aspect ratio for generation
  * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
+ * @param initialTokenUsage - Optional initial token counts from persisted entity data
  */
 export function useAssetChat(
   assetId: string,
@@ -31,6 +39,7 @@ export function useAssetChat(
   modelId?: Ref<string | undefined>,
   aspectRatio?: Ref<string | undefined>,
   mode?: Ref<ChatMode>,
+  initialTokenUsage?: InitialTokenUsage,
 ) {
   const onAssetUpdate = ref<(() => void) | null>(null)
 
@@ -38,7 +47,12 @@ export function useAssetChat(
   const lastResponseHadGeneration = ref(false)
 
   // Token usage - tracks cumulative totals for the conversation
-  const tokenUsage = ref<TokenUsageMetadata>({})
+  // Initialize with persisted values if provided
+  const tokenUsage = ref<TokenUsageMetadata>({
+    totalTokens: initialTokenUsage?.totalTokens ?? 0,
+    promptTokens: initialTokenUsage?.promptTokens ?? 0,
+    completionTokens: initialTokenUsage?.completionTokens ?? 0,
+  })
 
   const chat = new Chat({
     messages: initialMessages,

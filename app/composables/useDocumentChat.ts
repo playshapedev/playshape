@@ -13,6 +13,13 @@ export interface TokenUsageMetadata {
   compactionMessage?: string
 }
 
+/** Initial token usage values to hydrate from persisted entity data */
+export interface InitialTokenUsage {
+  totalTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+}
+
 /**
  * Creates a Chat instance for AI-generated document conversations.
  *
@@ -23,12 +30,14 @@ export interface TokenUsageMetadata {
  * @param documentId - The document ID to chat about
  * @param initialMessages - Initial messages to hydrate the chat
  * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
+ * @param initialTokenUsage - Optional initial token counts from persisted entity data
  */
 export function useDocumentChat(
   libraryId: string,
   documentId: string,
   initialMessages: UIMessage[] = [],
   mode?: Ref<ChatMode>,
+  initialTokenUsage?: InitialTokenUsage,
 ) {
   const onDocumentUpdate = ref<(() => void) | null>(null)
 
@@ -36,7 +45,12 @@ export function useDocumentChat(
   const lastResponseHadUpdate = ref(false)
 
   // Token usage - tracks cumulative totals for the conversation
-  const tokenUsage = ref<TokenUsageMetadata>({})
+  // Initialize with persisted values if provided
+  const tokenUsage = ref<TokenUsageMetadata>({
+    totalTokens: initialTokenUsage?.totalTokens ?? 0,
+    promptTokens: initialTokenUsage?.promptTokens ?? 0,
+    completionTokens: initialTokenUsage?.completionTokens ?? 0,
+  })
 
   const chat = new Chat({
     messages: initialMessages,

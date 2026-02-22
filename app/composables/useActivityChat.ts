@@ -3,6 +3,23 @@ import { DefaultChatTransport } from 'ai'
 import type { UIMessage } from 'ai'
 import type { ChatMode } from '~/utils/chatMode'
 
+/** Token usage metadata sent from the server */
+export interface TokenUsageMetadata {
+  contextTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  wasCompacted?: boolean
+  compactionMessage?: string
+}
+
+/** Initial token usage values to hydrate from persisted entity data */
+export interface InitialTokenUsage {
+  totalTokens?: number
+  promptTokens?: number
+  completionTokens?: number
+}
+
 /**
  * Creates a Chat instance for an activity's AI conversation.
  *
@@ -14,6 +31,7 @@ import type { ChatMode } from '~/utils/chatMode'
  * @param activityId - The activity ID to chat about
  * @param initialMessages - Initial messages to hydrate the chat
  * @param mode - Reactive ref to the current chat mode ('build' or 'plan')
+ * @param initialTokenUsage - Optional initial token counts from persisted entity data
  */
 export function useActivityChat(
   projectId: string,
@@ -21,11 +39,20 @@ export function useActivityChat(
   activityId: string,
   initialMessages: UIMessage[] = [],
   mode?: Ref<ChatMode>,
+  initialTokenUsage?: InitialTokenUsage,
 ) {
   const onActivityUpdate = ref<(() => void) | null>(null)
 
   // Track whether the last AI response included an update_activity tool call.
   const lastResponseHadUpdate = ref(false)
+
+  // Token usage - tracks cumulative totals for the conversation
+  // Initialize with persisted values if provided
+  const tokenUsage = ref<TokenUsageMetadata>({
+    totalTokens: initialTokenUsage?.totalTokens ?? 0,
+    promptTokens: initialTokenUsage?.promptTokens ?? 0,
+    completionTokens: initialTokenUsage?.completionTokens ?? 0,
+  })
 
   const chat = new Chat({
     messages: initialMessages,
@@ -33,12 +60,31 @@ export function useActivityChat(
       api: `/api/projects/${projectId}/courses/${courseId}/activities/${activityId}/chat`,
       body: () => ({ mode: mode?.value }),
     }),
-    onFinish: async () => {
+    onFinish: async ({ message }) => {
       // Check if any assistant message in this response used update_activity
       lastResponseHadUpdate.value = chat.messages.some(msg =>
         msg.role === 'assistant'
         && msg.parts.some(p => p.type === 'tool-update_activity'),
       )
+
+      // Extract token usage from message metadata and accumulate
+      const metadata = message?.metadata as { tokenUsage?: TokenUsageMetadata } | undefined
+      if (metadata?.tokenUsage) {
+        const prev = tokenUsage.value
+        const incoming = metadata.tokenUsage
+
+        tokenUsage.value = {
+          // Accumulate tokens across responses
+          promptTokens: (prev.promptTokens ?? 0) + (incoming.promptTokens ?? 0),
+          completionTokens: (prev.completionTokens ?? 0) + (incoming.completionTokens ?? 0),
+          totalTokens: (prev.totalTokens ?? 0) + (incoming.totalTokens ?? 0),
+          // Context tokens are from the latest request only
+          contextTokens: incoming.contextTokens,
+          // Track if any response used compaction
+          wasCompacted: prev.wasCompacted || incoming.wasCompacted,
+          compactionMessage: incoming.compactionMessage || prev.compactionMessage,
+        }
+      }
 
       await saveMessages()
       onActivityUpdate.value?.()
@@ -100,5 +146,6 @@ export function useActivityChat(
     saveMessages,
     onActivityUpdate,
     reportPreviewError,
+    tokenUsage,
   }
 }

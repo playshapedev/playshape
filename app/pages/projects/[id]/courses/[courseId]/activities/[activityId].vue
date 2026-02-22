@@ -179,6 +179,11 @@ watchEffect(() => {
       activityId,
       initialChatMessages.value,
       mode,
+      {
+        totalTokens: activity.value.totalTokens,
+        promptTokens: activity.value.totalPromptTokens,
+        completionTokens: activity.value.totalCompletionTokens,
+      },
     )
     // Wire up the update callback so we refresh activity data after AI updates
     instance.onActivityUpdate.value = () => onActivityUpdated()
@@ -197,6 +202,7 @@ const externalChatInstance = computed(() => {
     sendMessage: chatInstance.value.sendMessage,
     stopGeneration: chatInstance.value.stopGeneration,
     reportPreviewError: chatInstance.value.reportPreviewError,
+    tokenUsage: chatInstance.value.tokenUsage,
   })
 })
 

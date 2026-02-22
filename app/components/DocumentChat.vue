@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import type { UIMessage } from 'ai'
 import type { Chat } from '@ai-sdk/vue'
-import type { TokenUsageMetadata } from '~/composables/useDocumentChat'
 import type { ChatMode } from '~/utils/chatMode'
+import type { AskQuestion, AskQuestionInput } from '~~/server/utils/tools/askQuestion'
+import type { InitialTokenUsage } from '~/composables/useDocumentChat'
 import { getInitialChatMode } from '~/utils/chatMode'
 
 const props = defineProps<{
   libraryId: string
   documentId: string
   initialMessages: UIMessage[]
+  initialTokenUsage?: InitialTokenUsage
 }>()
 
 const emit = defineEmits<{
@@ -27,7 +29,7 @@ function toggleMode() {
 }
 
 // Wire up the update callback
-const documentChat = useDocumentChat(props.libraryId, props.documentId, props.initialMessages, mode)
+const documentChat = useDocumentChat(props.libraryId, props.documentId, props.initialMessages, mode, props.initialTokenUsage)
 documentChat.onDocumentUpdate.value = () => emit('update')
 
 // Use the chat from the composable
@@ -37,20 +39,29 @@ const { sendMessage, stopGeneration, tokenUsage } = documentChat
 const isRunning = computed(() => chatInstance.status === 'streaming' || chatInstance.status === 'submitted')
 
 const input = ref('')
-const customAnswer = ref('')
-const showCustomInput = ref(false)
-const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
 const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
-
-// Arrow key navigation for question options
-const selectedOptionIndex = ref(0)
 const messagesContainer = ref<HTMLElement | null>(null)
 const innerWrapperRef = ref<HTMLElement | null>(null)
 
+// ─── Multi-Question State ────────────────────────────────────────────────────
+
+interface PendingQuestions {
+  toolCallId: string
+  questions: AskQuestion[]
+}
+
+const activeQuestionIndex = ref(0)
+const selectedOptionIndex = ref(0)
+const answers = ref<Map<string, string>>(new Map())
+const customInputForQuestion = ref<string | null>(null)
+const customAnswerText = ref('')
+const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
+
 /**
  * Find the pending ask_question tool call from the last assistant message.
+ * Returns null if there isn't one or if the last message isn't from the assistant.
  */
-const pendingQuestion = computed(() => {
+const pendingQuestions = computed<PendingQuestions | null>(() => {
   const msgs = chatInstance.messages
   if (!msgs.length) return null
   const last = msgs[msgs.length - 1]
@@ -58,12 +69,11 @@ const pendingQuestion = computed(() => {
 
   for (const part of last.parts) {
     if (part.type === 'tool-ask_question') {
-      const p = part as { state: string; toolCallId: string; input: { question: string; options: Array<{ label: string; value: string }> } }
+      const p = part as { state: string; toolCallId: string; input: AskQuestionInput }
       if (p.state === 'input-available') {
         return {
           toolCallId: p.toolCallId,
-          question: p.input.question,
-          options: p.input.options,
+          questions: p.input.questions,
         }
       }
     }
@@ -71,59 +81,210 @@ const pendingQuestion = computed(() => {
   return null
 })
 
-// Reset selection when question changes
-watch(pendingQuestion, () => {
-  selectedOptionIndex.value = 0
+// Derived state
+const activeQuestion = computed(() => pendingQuestions.value?.questions[activeQuestionIndex.value])
+const isSingleQuestion = computed(() => pendingQuestions.value?.questions.length === 1)
+const allAnswered = computed(() => {
+  if (!pendingQuestions.value) return false
+  return pendingQuestions.value.questions.every(q => answers.value.has(q.id))
+})
+const showConfirmTab = computed(() => !isSingleQuestion.value && allAnswered.value)
+const isOnConfirmTab = computed(() =>
+  pendingQuestions.value && activeQuestionIndex.value === pendingQuestions.value.questions.length,
+)
+
+// Reset state when questions change (new tool call)
+watch(pendingQuestions, (newVal, oldVal) => {
+  if (newVal?.toolCallId !== oldVal?.toolCallId) {
+    answers.value = new Map()
+    activeQuestionIndex.value = 0
+    selectedOptionIndex.value = 0
+    customInputForQuestion.value = null
+    customAnswerText.value = ''
+  }
 })
 
-// Keyboard shortcuts
+// ─── Question Navigation & Selection ─────────────────────────────────────────
+
+function goToQuestion(index: number) {
+  activeQuestionIndex.value = index
+  selectedOptionIndex.value = 0
+  customInputForQuestion.value = null
+}
+
+function goToConfirm() {
+  if (!pendingQuestions.value) return
+  activeQuestionIndex.value = pendingQuestions.value.questions.length
+}
+
+function selectOption(value: string) {
+  if (!activeQuestion.value) return
+  answers.value.set(activeQuestion.value.id, value)
+  advanceToNext()
+}
+
+function advanceToNext() {
+  if (!pendingQuestions.value) return
+
+  // Single question? Submit immediately
+  if (isSingleQuestion.value) {
+    submitAllAnswers()
+    return
+  }
+
+  // Find next unanswered question
+  const questions = pendingQuestions.value.questions
+  for (let i = 0; i < questions.length; i++) {
+    const idx = (activeQuestionIndex.value + 1 + i) % questions.length
+    if (!answers.value.has(questions[idx]!.id)) {
+      goToQuestion(idx)
+      return
+    }
+  }
+
+  // All answered - go to confirm tab
+  goToConfirm()
+}
+
+function submitAllAnswers() {
+  if (!pendingQuestions.value) return
+
+  const answersObj: Record<string, string> = {}
+  for (const [id, value] of answers.value) {
+    answersObj[id] = value
+  }
+
+  sendMessage(JSON.stringify({ answers: answersObj }))
+
+  // Reset state
+  answers.value = new Map()
+  activeQuestionIndex.value = 0
+  selectedOptionIndex.value = 0
+}
+
+function openQuestionCustomInput() {
+  if (!activeQuestion.value) return
+  customInputForQuestion.value = activeQuestion.value.id
+  customAnswerText.value = ''
+  nextTick(() => {
+    customInputRef.value?.el?.focus()
+  })
+}
+
+function submitQuestionCustomAnswer() {
+  if (!customAnswerText.value.trim() || !activeQuestion.value) return
+  const text = customAnswerText.value.trim()
+  customInputForQuestion.value = null
+  customAnswerText.value = ''
+  selectOption(text)
+}
+
+function cancelQuestionCustomInput() {
+  customInputForQuestion.value = null
+  customAnswerText.value = ''
+}
+
+function cancelQuestions() {
+  // Stop generation and reset state
+  stopGeneration()
+  answers.value = new Map()
+  activeQuestionIndex.value = 0
+  selectedOptionIndex.value = 0
+  customInputForQuestion.value = null
+  customAnswerText.value = ''
+  // Refocus the text input
+  nextTick(() => {
+    textareaRef.value?.textarea?.focus()
+  })
+}
+
+// ─── Keyboard Handling ───────────────────────────────────────────────────────
+
 function onKeyDown(e: KeyboardEvent) {
-  // Escape stops generation
-  if (e.key === 'Escape' && isRunning.value) {
-    e.preventDefault()
-    stopGeneration()
-    return
+  // Escape: stop generation or cancel questions
+  if (e.key === 'Escape') {
+    if (customInputForQuestion.value) {
+      e.preventDefault()
+      cancelQuestionCustomInput()
+      return
+    }
+    if (pendingQuestions.value) {
+      e.preventDefault()
+      cancelQuestions()
+      return
+    }
+    if (isRunning.value) {
+      e.preventDefault()
+      stopGeneration()
+      return
+    }
   }
 
-  if (!pendingQuestion.value || chatInstance.status === 'streaming' || showCustomInput.value) return
+  // Rest of keyboard handling only applies when questions are pending
+  if (!pendingQuestions.value || chatInstance.status === 'streaming' || customInputForQuestion.value) return
 
-  const totalOptions = pendingQuestion.value.options.length + 1
+  const questions = pendingQuestions.value.questions
 
-  // Arrow key navigation
-  if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+  // Tab / Shift+Tab: switch between question tabs (only if multiple questions)
+  if (e.key === 'Tab' && !isSingleQuestion.value) {
     e.preventDefault()
-    selectedOptionIndex.value = (selectedOptionIndex.value + 1) % totalOptions
-    return
-  }
-  if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-    e.preventDefault()
-    selectedOptionIndex.value = (selectedOptionIndex.value - 1 + totalOptions) % totalOptions
-    return
-  }
-
-  // Enter selects the highlighted option
-  if (e.key === 'Enter') {
-    e.preventDefault()
-    if (selectedOptionIndex.value < pendingQuestion.value.options.length) {
-      const option = pendingQuestion.value.options[selectedOptionIndex.value]!
-      handleAnswer(option.value)
+    const maxIndex = showConfirmTab.value ? questions.length : questions.length - 1
+    if (e.shiftKey) {
+      activeQuestionIndex.value = Math.max(0, activeQuestionIndex.value - 1)
     }
     else {
-      openCustomInput()
+      activeQuestionIndex.value = Math.min(maxIndex, activeQuestionIndex.value + 1)
+    }
+    selectedOptionIndex.value = 0
+    return
+  }
+
+  // On confirm tab
+  if (isOnConfirmTab.value) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      submitAllAnswers()
     }
     return
   }
 
-  // Number keys (1-9) for direct selection
-  const num = parseInt(e.key)
-  if (num >= 1 && num <= totalOptions) {
-    e.preventDefault()
-    if (num <= pendingQuestion.value.options.length) {
-      const option = pendingQuestion.value.options[num - 1]!
-      handleAnswer(option.value)
+  // Arrow keys: navigate options within current question
+  if (activeQuestion.value) {
+    const totalOptions = activeQuestion.value.options.length + 1 // +1 for custom input
+
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+      e.preventDefault()
+      selectedOptionIndex.value = (selectedOptionIndex.value + 1) % totalOptions
+      return
     }
-    else {
-      openCustomInput()
+    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      e.preventDefault()
+      selectedOptionIndex.value = (selectedOptionIndex.value - 1 + totalOptions) % totalOptions
+      return
+    }
+
+    // Enter: select highlighted option
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (selectedOptionIndex.value < activeQuestion.value.options.length) {
+        selectOption(activeQuestion.value.options[selectedOptionIndex.value]!.value)
+      }
+      else {
+        openQuestionCustomInput()
+      }
+      return
+    }
+
+    // Number keys (1-9) for direct selection
+    const num = parseInt(e.key)
+    if (num >= 1 && num <= totalOptions) {
+      e.preventDefault()
+      if (num <= activeQuestion.value.options.length) {
+        selectOption(activeQuestion.value.options[num - 1]!.value)
+      }
+      else {
+        openQuestionCustomInput()
+      }
     }
   }
 }
@@ -144,36 +305,7 @@ async function handleSend() {
   const text = input.value.trim()
   input.value = ''
 
-  documentChat.sendMessage(text)
-}
-
-function handleAnswer(value: string) {
-  const q = pendingQuestion.value
-  if (!q) return
-  const selectedLabel = q.options.find(o => o.value === value)?.label || value
-  showCustomInput.value = false
-  customAnswer.value = ''
-  documentChat.sendMessage(selectedLabel)
-}
-
-function openCustomInput() {
-  showCustomInput.value = true
-  customAnswer.value = ''
-  nextTick(() => {
-    customInputRef.value?.el?.focus()
-  })
-}
-
-function submitCustomAnswer() {
-  if (!customAnswer.value.trim()) return
-  documentChat.sendMessage(customAnswer.value.trim())
-  showCustomInput.value = false
-  customAnswer.value = ''
-}
-
-function cancelCustomInput() {
-  showCustomInput.value = false
-  customAnswer.value = ''
+  sendMessage(text)
 }
 
 function handleRetry() {
@@ -417,7 +549,7 @@ watch(() => chatInstance.messages.length, (count) => {
                 class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
               >
                 <UIcon name="i-lucide-message-circle-question" class="size-3.5" />
-                {{ (part as any).input?.question || 'Asked a question' }}
+                {{ (part as any).input?.questions?.[0]?.question || 'Asked a question' }}
               </div>
             </template>
           </div>
@@ -469,63 +601,141 @@ watch(() => chatInstance.messages.length, (count) => {
       </div>
     </div>
 
-    <!-- Question buttons -->
-    <div v-if="pendingQuestion" class="border-t border-default p-3 space-y-2 font-mono">
-      <p class="text-sm">{{ pendingQuestion.question }}</p>
-      <div class="flex flex-wrap gap-1.5">
-        <UButton
-          v-for="(option, index) in pendingQuestion.options"
-          :key="option.value"
-          variant="soft"
-          color="neutral"
-          size="sm"
-          :class="selectedOptionIndex === index ? 'bg-accented/75' : ''"
-          class="hover:text-primary hover:bg-primary/10"
-          :disabled="showCustomInput"
-          @click="handleAnswer(option.value)"
+    <!-- Question UI (replaces input when AI asks questions) -->
+    <div v-if="pendingQuestions" class="border-t border-default font-mono">
+      <!-- Tab bar (only show if multiple questions) -->
+      <div v-if="!isSingleQuestion" class="flex border-b border-default px-3">
+        <button
+          v-for="(q, index) in pendingQuestions.questions"
+          :key="q.id"
+          type="button"
+          :class="[
+            'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5',
+            activeQuestionIndex === index
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-default'
+          ]"
+          @click="goToQuestion(index)"
         >
-          <UKbd :value="String(index + 1)" size="sm" class="mr-1" />
-          {{ option.label }}
-        </UButton>
-        <UButton
-          variant="soft"
-          color="neutral"
-          size="sm"
-          :class="selectedOptionIndex === pendingQuestion.options.length ? 'bg-accented/75' : ''"
-          class="hover:text-primary hover:bg-primary/10"
-          :disabled="showCustomInput"
-          @click="openCustomInput"
+          {{ q.label }}
+          <UIcon v-if="answers.has(q.id)" name="i-lucide-check" class="size-3 text-success" />
+        </button>
+        <!-- Confirm tab (only visible when all answered) -->
+        <button
+          v-if="showConfirmTab"
+          type="button"
+          :class="[
+            'px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors',
+            isOnConfirmTab
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted hover:text-default'
+          ]"
+          @click="goToConfirm"
         >
-          <UKbd :value="String(pendingQuestion.options.length + 1)" size="sm" class="mr-1" />
-          Type my own answer
-        </UButton>
+          Confirm
+        </button>
       </div>
 
-      <!-- Custom answer input -->
-      <div v-if="showCustomInput" class="flex gap-2">
-        <UInput
-          ref="customInputRef"
-          v-model="customAnswer"
-          placeholder="Type your answer..."
-          class="flex-1"
-          @keydown.enter="submitCustomAnswer"
-          @keydown.escape="cancelCustomInput"
-        />
-        <UButton
-          icon="i-lucide-send"
-          :disabled="!customAnswer.trim()"
-          @click="submitCustomAnswer"
-        />
-        <UButton
-          icon="i-lucide-x"
-          variant="ghost"
-          color="neutral"
-          @click="cancelCustomInput"
-        />
+      <!-- Question content -->
+      <div class="p-3 space-y-3">
+        <!-- Question + options (not on confirm tab) -->
+        <template v-if="!isOnConfirmTab && activeQuestion">
+          <p class="text-sm">{{ activeQuestion.question }}</p>
+
+          <!-- Options list (hidden when custom input is open for this question) -->
+          <div v-if="customInputForQuestion !== activeQuestion.id" class="space-y-1">
+            <button
+              v-for="(option, index) in activeQuestion.options"
+              :key="option.value"
+              type="button"
+              :class="[
+                'w-full text-left px-2 py-1.5 rounded transition-colors',
+                answers.get(activeQuestion.id) === option.value
+                  ? 'bg-primary/10 text-primary'
+                  : selectedOptionIndex === index
+                    ? 'bg-accented/75'
+                    : 'hover:bg-elevated'
+              ]"
+              @click="selectOption(option.value)"
+            >
+              <div class="flex items-start gap-2">
+                <span class="text-muted w-4 shrink-0">{{ index + 1 }}.</span>
+                <div class="min-w-0">
+                  <span class="font-medium">{{ option.label }}</span>
+                  <p v-if="option.description" class="text-xs text-muted mt-0.5">
+                    {{ option.description }}
+                  </p>
+                </div>
+              </div>
+            </button>
+            <!-- Type your own answer option -->
+            <button
+              type="button"
+              :class="[
+                'w-full text-left px-2 py-1.5 rounded transition-colors',
+                selectedOptionIndex === activeQuestion.options.length
+                  ? 'bg-accented/75'
+                  : 'hover:bg-elevated'
+              ]"
+              @click="openQuestionCustomInput"
+            >
+              <div class="flex items-start gap-2">
+                <span class="text-muted w-4 shrink-0">{{ activeQuestion.options.length + 1 }}.</span>
+                <span class="text-primary">Type your own answer</span>
+              </div>
+            </button>
+          </div>
+
+          <!-- Custom input (when typing own answer) -->
+          <div v-else class="flex gap-2">
+            <UInput
+              ref="customInputRef"
+              v-model="customAnswerText"
+              placeholder="Type your answer..."
+              class="flex-1"
+              autofocus
+              @keydown.enter="submitQuestionCustomAnswer"
+              @keydown.escape="cancelQuestionCustomInput"
+            />
+            <UButton
+              icon="i-lucide-send"
+              :disabled="!customAnswerText.trim()"
+              @click="submitQuestionCustomAnswer"
+            />
+            <UButton
+              icon="i-lucide-x"
+              variant="ghost"
+              color="neutral"
+              @click="cancelQuestionCustomInput"
+            />
+          </div>
+        </template>
+
+        <!-- Confirm tab content -->
+        <template v-else-if="isOnConfirmTab">
+          <p class="text-sm text-muted">Review your answers:</p>
+          <div class="space-y-1 text-sm">
+            <div v-for="q in pendingQuestions.questions" :key="q.id" class="flex gap-2">
+              <span class="text-muted">{{ q.label }}:</span>
+              <span>{{ answers.get(q.id) || '(not answered)' }}</span>
+            </div>
+          </div>
+          <UButton class="mt-2" @click="submitAllAnswers">
+            Confirm
+          </UButton>
+        </template>
+      </div>
+
+      <!-- Keyboard hints -->
+      <div class="px-3 pb-2 flex gap-4 text-xs text-muted">
+        <span v-if="!isSingleQuestion"><UKbd value="Tab" size="xs" /> switch</span>
+        <span><UKbd value="↑↓" size="xs" /> select</span>
+        <span><UKbd value="Enter" size="xs" /> confirm</span>
+        <span><UKbd value="Esc" size="xs" /> cancel</span>
       </div>
     </div>
 
-    <!-- Text input (hidden when question is pending) -->
+    <!-- Text input (hidden when questions are pending) -->
     <div v-else class="border-t border-default p-3 space-y-2">
       <div
         class="flex gap-2 pl-3 border-l-2 rounded-r-lg transition-colors"

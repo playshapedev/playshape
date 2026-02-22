@@ -11,7 +11,7 @@ import { hasSchemaChanged } from '~~/server/utils/schemaEquality'
 import { runMigration, validateMigrationSyntax } from '~~/server/utils/runMigration'
 import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSchema'
 import { compactContext } from '~~/server/utils/contextCompaction'
-import { recordTokenUsage } from '~~/server/utils/tokens'
+import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { validateTemplate } from '~~/server/utils/templateValidation'
 import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
 
@@ -43,7 +43,7 @@ export default defineLazyEventHandler(() => {
         const p = part as Record<string, unknown>
         if (p.type === 'tool-ask_question' && p.state !== 'output-available') {
           p.state = 'output-available'
-          p.output = p.output ?? { answered: true }
+          p.output = p.output ?? { answered: true, answers: {} }
         }
       }
     }
@@ -866,6 +866,8 @@ export default defineLazyEventHandler(() => {
             totalTokens: promptTokens + completionTokens,
             wasCompacted: compaction.wasCompacted,
           })
+          // Increment cumulative token counters on the template
+          incrementEntityTokens('template', id, promptTokens, completionTokens)
         }
       },
     })
