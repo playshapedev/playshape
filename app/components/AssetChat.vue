@@ -490,15 +490,16 @@ onUnmounted(() => {
         <span class="text-sm text-muted">Model:</span>
         <UDropdownMenu
           :items="modelSelectorItems"
-          :ui="{ content: 'w-64' }"
+          :ui="{ content: 'w-64 text-left' }"
         >
           <UButton
             variant="ghost"
             color="neutral"
             size="sm"
             trailing-icon="i-lucide-chevron-down"
+            class="max-w-48"
           >
-            {{ selectedModelLabel }}
+            <span class="truncate">{{ selectedModelLabel }}</span>
           </UButton>
           <template #item="{ item }">
             <div
