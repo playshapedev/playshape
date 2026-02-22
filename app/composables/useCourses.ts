@@ -42,6 +42,9 @@ export interface ActivityDetail extends Activity {
     dependencies: TemplateDependency[] | null
     tools: string[] | null
     status: string
+    schemaVersion: number
+    latestSchemaVersion?: number
+    upgradeAvailable: boolean
   } | null
 }
 

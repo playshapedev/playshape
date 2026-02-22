@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
 import type { UIMessage } from 'ai'
 import { eq, and, isNotNull, inArray } from 'drizzle-orm'
-import { activities, templates, courseSections, courses, projectLibraries, documentChunks, documents } from '~~/server/database/schema'
+import { activities, templates, templateVersions, courseSections, courses, projectLibraries, documentChunks, documents } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 
 export default defineLazyEventHandler(() => {
@@ -106,20 +106,80 @@ export default defineLazyEventHandler(() => {
             const current = db.select().from(activities).where(eq(activities.id, activityId)).get()
             const currentTmpl = db.select().from(templates).where(eq(templates.id, activity.templateId)).get()
 
-            // Update last read timestamp for stale context detection
+            if (!current || !currentTmpl) {
+              return { error: 'Activity or template not found' }
+            }
+
+            // Get versioned template data - use the version the activity's data is on
+            const activityDataVersion = current.dataSchemaVersion ?? 1
+            const latestTemplateVersion = currentTmpl.schemaVersion
+
+            // If activity is on an older version, fetch that version's schema/component
+            let templateData: {
+              inputSchema: unknown
+              component: string | null
+              sampleData: unknown
+            }
+
+            if (activityDataVersion < latestTemplateVersion) {
+              // Fetch the specific version the activity is using
+              const version = db
+                .select()
+                .from(templateVersions)
+                .where(
+                  and(
+                    eq(templateVersions.templateId, currentTmpl.id),
+                    eq(templateVersions.version, activityDataVersion),
+                  ),
+                )
+                .get()
+
+              if (version) {
+                templateData = {
+                  inputSchema: version.inputSchema,
+                  component: version.component,
+                  sampleData: version.sampleData,
+                }
+              }
+              else {
+                // Fallback to current template if version not found
+                templateData = {
+                  inputSchema: currentTmpl.inputSchema,
+                  component: currentTmpl.component,
+                  sampleData: currentTmpl.sampleData,
+                }
+              }
+            }
+            else {
+              // Activity is on latest version
+              templateData = {
+                inputSchema: currentTmpl.inputSchema,
+                component: currentTmpl.component,
+                sampleData: currentTmpl.sampleData,
+              }
+            }
+
+            // Update timestamps for stale context detection and track what version we told the LLM about
             db.update(activities)
-              .set({ dataLastReadAt: new Date() })
+              .set({
+                dataLastReadAt: new Date(),
+                chatSchemaVersion: activityDataVersion,
+              })
               .where(eq(activities.id, activityId))
               .run()
 
             return {
-              activityName: current?.name,
-              activityDescription: current?.description,
-              currentData: current?.data ?? {},
-              inputSchema: currentTmpl?.inputSchema,
-              component: currentTmpl?.component,
-              sampleData: currentTmpl?.sampleData,
-              templateName: currentTmpl?.name,
+              activityName: current.name,
+              activityDescription: current.description,
+              currentData: current.data ?? {},
+              inputSchema: templateData.inputSchema,
+              component: templateData.component,
+              sampleData: templateData.sampleData,
+              templateName: currentTmpl.name,
+              // Version info
+              dataSchemaVersion: activityDataVersion,
+              latestTemplateVersion,
+              upgradeAvailable: activityDataVersion < latestTemplateVersion,
             }
           },
         }),

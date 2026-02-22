@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { eq } from 'drizzle-orm'
-import { templates, TEMPLATE_KINDS } from '~~/server/database/schema'
+import { templates, templateVersions, TEMPLATE_KINDS } from '~~/server/database/schema'
 
 const createTemplateSchema = z.object({
   name: z.string().min(1, 'Template name is required'),
@@ -16,14 +16,29 @@ export default defineEventHandler(async (event) => {
   const now = new Date()
   const id = crypto.randomUUID()
 
+  // Create the template with schemaVersion 1
   db.insert(templates).values({
     id,
     kind: parsed.kind,
     name: parsed.name,
     description: parsed.description,
+    schemaVersion: 1,
     status: 'draft',
     createdAt: now,
     updatedAt: now,
+  }).run()
+
+  // Create the initial v1 version snapshot
+  db.insert(templateVersions).values({
+    id: crypto.randomUUID(),
+    templateId: id,
+    version: 1,
+    inputSchema: null,
+    component: null,
+    sampleData: null,
+    dependencies: null,
+    tools: null,
+    createdAt: now,
   }).run()
 
   return db.select().from(templates).where(eq(templates.id, id)).get()

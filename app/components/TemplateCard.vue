@@ -43,6 +43,13 @@ defineProps<{
             variant="subtle"
             size="xs"
           />
+          <UBadge
+            v-if="template.schemaVersion > 1"
+            :label="`v${template.schemaVersion}`"
+            color="info"
+            variant="subtle"
+            size="xs"
+          />
         </div>
         <p v-if="template.description" class="text-sm text-muted line-clamp-2">
           {{ template.description }}

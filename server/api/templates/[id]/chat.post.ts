@@ -1,12 +1,15 @@
 import { z } from 'zod'
 import { streamText, tool, stepCountIs, convertToModelMessages } from 'ai'
 import type { UIMessage } from 'ai'
-import { eq } from 'drizzle-orm'
-import { templates } from '~~/server/database/schema'
+import { eq, and } from 'drizzle-orm'
+import { templates, templateVersions, templatePendingChanges, templateMigrations, activities, courseSections, courses, projects } from '~~/server/database/schema'
 import type { TemplateField, TemplateDependency } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { getReferenceTool } from '~~/server/utils/tools/getReference'
 import { fieldSchema } from '~~/server/utils/tools/fieldSchema'
+import { hasSchemaChanged } from '~~/server/utils/schemaEquality'
+import { runMigration, validateMigrationSyntax } from '~~/server/utils/runMigration'
+import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSchema'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -84,7 +87,7 @@ export default defineLazyEventHandler(() => {
       tools: {
         get_reference: getReferenceTool,
         get_template: tool({
-          description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes.',
+          description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes. ALWAYS call this before making updates.',
           inputSchema: z.object({}),
           execute: async () => {
             const current = db.select().from(templates).where(eq(templates.id, id)).get()
@@ -96,6 +99,13 @@ export default defineLazyEventHandler(() => {
               .where(eq(templates.id, id))
               .run()
 
+            // Check for pending schema changes (from a previous update_template that detected breaking changes)
+            const pending = db
+              .select()
+              .from(templatePendingChanges)
+              .where(eq(templatePendingChanges.templateId, id))
+              .get()
+
             return {
               name: current.name,
               description: current.description,
@@ -105,6 +115,8 @@ export default defineLazyEventHandler(() => {
               dependencies: current.dependencies,
               tools: current.tools,
               status: current.status,
+              schemaVersion: current.schemaVersion,
+              hasPendingChanges: !!pending,
             }
           },
         }),
@@ -146,7 +158,100 @@ export default defineLazyEventHandler(() => {
               }
             }
 
-            // Persist the template update to the database
+            // Check if schema has changed structurally
+            const schemaChanged = hasSchemaChanged(
+              current.inputSchema as TemplateField[] | null,
+              fields as TemplateField[],
+            )
+
+            if (schemaChanged) {
+              // Find activities using this template
+              const affectedActivities = db
+                .select({
+                  id: activities.id,
+                  name: activities.name,
+                  projectId: projects.id,
+                  projectName: projects.name,
+                  courseId: courses.id,
+                  courseName: courses.name,
+                })
+                .from(activities)
+                .innerJoin(courseSections, eq(activities.sectionId, courseSections.id))
+                .innerJoin(courses, eq(courseSections.courseId, courses.id))
+                .innerJoin(projects, eq(courses.projectId, projects.id))
+                .where(eq(activities.templateId, id))
+                .all()
+
+              if (affectedActivities.length > 0) {
+                // Store pending changes
+                db.delete(templatePendingChanges)
+                  .where(eq(templatePendingChanges.templateId, id))
+                  .run()
+
+                db.insert(templatePendingChanges).values({
+                  id: crypto.randomUUID(),
+                  templateId: id,
+                  inputSchema: fields as TemplateField[],
+                  component,
+                  sampleData,
+                  dependencies: (dependencies as TemplateDependency[]) || [],
+                  tools: toolIds || [],
+                  createdAt: new Date(),
+                }).run()
+
+                // Return info about affected activities for the LLM to relay to the user
+                const activityList = affectedActivities.map(a => ({
+                  name: a.name,
+                  project: a.projectName,
+                  course: a.courseName,
+                  url: `/projects/${a.projectId}/courses/${a.courseId}/activities/${a.id}`,
+                }))
+
+                return {
+                  success: false,
+                  schemaChangeDetected: true,
+                  affectedActivitiesCount: affectedActivities.length,
+                  affectedActivities: activityList,
+                  message: `The data structure (input schema) will change. There are ${affectedActivities.length} existing activities using this template. Use the ask_question tool to ask the user whether to: (1) Migrate existing activities to the new schema (you'll need to provide a migration function), or (2) Keep existing activities on the old schema and use the new version going forward.`,
+                }
+              }
+
+              // No affected activities - can proceed with version bump
+              const newVersion = current.schemaVersion + 1
+
+              // Create new version snapshot
+              db.insert(templateVersions).values({
+                id: crypto.randomUUID(),
+                templateId: id,
+                version: newVersion,
+                inputSchema: fields as TemplateField[],
+                component,
+                sampleData,
+                dependencies: (dependencies as TemplateDependency[]) || [],
+                tools: toolIds || [],
+                createdAt: new Date(),
+              }).run()
+
+              // Update template
+              db.update(templates)
+                .set({
+                  schemaVersion: newVersion,
+                  inputSchema: fields as TemplateField[],
+                  component,
+                  sampleData,
+                  dependencies: (dependencies as TemplateDependency[]) || [],
+                  tools: toolIds || [],
+                  componentLastModifiedAt: new Date(),
+                  componentLastReadAt: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(templates.id, id))
+                .run()
+
+              return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true }
+            }
+
+            // No schema change - update template and current version snapshot
             db.update(templates)
               .set({
                 inputSchema: fields as TemplateField[],
@@ -155,10 +260,27 @@ export default defineLazyEventHandler(() => {
                 dependencies: (dependencies as TemplateDependency[]) || [],
                 tools: toolIds || [],
                 componentLastModifiedAt: new Date(),
-                componentLastReadAt: null, // Force re-read before next modification
+                componentLastReadAt: null,
                 updatedAt: new Date(),
               })
               .where(eq(templates.id, id))
+              .run()
+
+            // Update current version snapshot
+            db.update(templateVersions)
+              .set({
+                inputSchema: fields as TemplateField[],
+                component,
+                sampleData,
+                dependencies: (dependencies as TemplateDependency[]) || [],
+                tools: toolIds || [],
+              })
+              .where(
+                and(
+                  eq(templateVersions.templateId, id),
+                  eq(templateVersions.version, current.schemaVersion),
+                ),
+              )
               .run()
 
             return { success: true, fieldCount: fields.length }
@@ -203,6 +325,91 @@ export default defineLazyEventHandler(() => {
               }
             }
 
+            // Check if schema has changed structurally (when fields are provided)
+            if (fields) {
+              const schemaChanged = hasSchemaChanged(
+                current.inputSchema as TemplateField[] | null,
+                fields as TemplateField[],
+              )
+
+              if (schemaChanged) {
+                // Find activities using this template
+                const affectedActivities = db
+                  .select({
+                    id: activities.id,
+                    name: activities.name,
+                    projectId: projects.id,
+                    projectName: projects.name,
+                    courseId: courses.id,
+                    courseName: courses.name,
+                  })
+                  .from(activities)
+                  .innerJoin(courseSections, eq(activities.sectionId, courseSections.id))
+                  .innerJoin(courses, eq(courseSections.courseId, courses.id))
+                  .innerJoin(projects, eq(courses.projectId, projects.id))
+                  .where(eq(activities.templateId, id))
+                  .all()
+
+                if (affectedActivities.length > 0) {
+                  // Apply component operations first to get patched component
+                  let patched = current.component
+                  for (let i = 0; i < operations.length; i++) {
+                    const op = operations[i]!
+                    const { search, replace } = op
+                    const firstIdx = patched.indexOf(search)
+                    if (firstIdx === -1) {
+                      return {
+                        success: false,
+                        error: `Operation ${i + 1} failed: search string not found in component source. Call get_template to see the current source and try again with the exact text.`,
+                        currentComponent: patched,
+                      }
+                    }
+                    const secondIdx = patched.indexOf(search, firstIdx + 1)
+                    if (secondIdx !== -1) {
+                      return {
+                        success: false,
+                        error: `Operation ${i + 1} failed: search string matches multiple locations. Include more surrounding context to uniquely identify the location.`,
+                        currentComponent: patched,
+                      }
+                    }
+                    patched = patched.substring(0, firstIdx) + replace + patched.substring(firstIdx + search.length)
+                  }
+
+                  // Store pending changes
+                  db.delete(templatePendingChanges)
+                    .where(eq(templatePendingChanges.templateId, id))
+                    .run()
+
+                  db.insert(templatePendingChanges).values({
+                    id: crypto.randomUUID(),
+                    templateId: id,
+                    inputSchema: fields as TemplateField[],
+                    component: patched,
+                    sampleData: sampleData ?? current.sampleData,
+                    dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
+                    tools: toolIds ?? current.tools ?? [],
+                    createdAt: new Date(),
+                  }).run()
+
+                  // Return info about affected activities for the LLM to relay to the user
+                  const activityList = affectedActivities.map(a => ({
+                    name: a.name,
+                    project: a.projectName,
+                    course: a.courseName,
+                    url: `/projects/${a.projectId}/courses/${a.courseId}/activities/${a.id}`,
+                  }))
+
+                  return {
+                    success: false,
+                    schemaChangeDetected: true,
+                    affectedActivitiesCount: affectedActivities.length,
+                    affectedActivities: activityList,
+                    message: `The data structure (input schema) will change. There are ${affectedActivities.length} existing activities using this template. Use the ask_question tool to ask the user whether to: (1) Migrate existing activities to the new schema (you'll need to provide a migration function), or (2) Keep existing activities on the old schema and use the new version going forward.`,
+                  }
+                }
+              }
+            }
+
             let patched = current.component
 
             // Apply operations sequentially
@@ -232,6 +439,48 @@ export default defineLazyEventHandler(() => {
               patched = patched.substring(0, firstIdx) + replace + patched.substring(firstIdx + search.length)
             }
 
+            // Check if this is a schema version bump (fields changed but no affected activities)
+            const schemaChanged = fields && hasSchemaChanged(
+              current.inputSchema as TemplateField[] | null,
+              fields as TemplateField[],
+            )
+
+            if (schemaChanged) {
+              // No affected activities - can proceed with version bump
+              const newVersion = current.schemaVersion + 1
+
+              // Create new version snapshot
+              db.insert(templateVersions).values({
+                id: crypto.randomUUID(),
+                templateId: id,
+                version: newVersion,
+                inputSchema: fields as TemplateField[],
+                component: patched,
+                sampleData: sampleData ?? current.sampleData,
+                dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
+                tools: toolIds ?? current.tools ?? [],
+                createdAt: new Date(),
+              }).run()
+
+              // Update template
+              db.update(templates)
+                .set({
+                  schemaVersion: newVersion,
+                  inputSchema: fields as TemplateField[],
+                  component: patched,
+                  sampleData: sampleData ?? current.sampleData,
+                  dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
+                  tools: toolIds ?? current.tools ?? [],
+                  componentLastModifiedAt: new Date(),
+                  componentLastReadAt: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(templates.id, id))
+                .run()
+
+              return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true }
+            }
+
             // Build the update payload — only include fields that were provided
             const updatePayload: Record<string, unknown> = {
               component: patched,
@@ -249,7 +498,260 @@ export default defineLazyEventHandler(() => {
               .where(eq(templates.id, id))
               .run()
 
+            // Update current version snapshot if we changed fields/sampleData/deps/tools
+            if (fields || sampleData || dependencies !== undefined || toolIds !== undefined) {
+              const versionUpdatePayload: Record<string, unknown> = { component: patched }
+              if (fields) versionUpdatePayload.inputSchema = fields as TemplateField[]
+              if (sampleData) versionUpdatePayload.sampleData = sampleData
+              if (dependencies !== undefined) versionUpdatePayload.dependencies = (dependencies as TemplateDependency[]) || []
+              if (toolIds !== undefined) versionUpdatePayload.tools = toolIds || []
+
+              db.update(templateVersions)
+                .set(versionUpdatePayload)
+                .where(
+                  and(
+                    eq(templateVersions.templateId, id),
+                    eq(templateVersions.version, current.schemaVersion),
+                  ),
+                )
+                .run()
+            }
+
             return { success: true, operationsApplied: operations.length }
+          },
+        }),
+        commit_schema_change: tool({
+          description: 'Commit a pending schema change after the user has chosen how to handle existing activities. Call this after update_template or patch_component detected a schema change and the user responded to the migration choice.',
+          inputSchema: z.object({
+            action: z.enum(['migrate', 'skip']).describe('Whether to migrate existing activities to the new schema, or skip them (keep them on the old version)'),
+            migrationFn: z.string().optional().describe('JavaScript function body that transforms old data to new schema. Receives `data` (old activity data object), must return transformed data object. Required when action is "migrate". Example: "return { ...data, newField: data.oldField || \'default\' }"'),
+          }),
+          execute: async ({ action, migrationFn }) => {
+            // Get pending changes
+            const pending = db
+              .select()
+              .from(templatePendingChanges)
+              .where(eq(templatePendingChanges.templateId, id))
+              .get()
+
+            if (!pending) {
+              return { success: false, error: 'No pending schema change found. Call update_template or patch_component first to propose changes.' }
+            }
+
+            const current = db.select().from(templates).where(eq(templates.id, id)).get()
+            if (!current) {
+              return { success: false, error: 'Template not found' }
+            }
+
+            const newVersion = current.schemaVersion + 1
+
+            if (action === 'migrate') {
+              if (!migrationFn) {
+                return { success: false, error: 'migrationFn is required when action is "migrate"' }
+              }
+
+              // Validate migration function syntax
+              const syntaxError = validateMigrationSyntax(migrationFn)
+              if (syntaxError) {
+                return { success: false, error: `Migration function syntax error: ${syntaxError}` }
+              }
+
+              // Find all activities using this template
+              const affectedActivities = db
+                .select({
+                  id: activities.id,
+                  name: activities.name,
+                  data: activities.data,
+                  projectId: projects.id,
+                  courseId: courses.id,
+                })
+                .from(activities)
+                .innerJoin(courseSections, eq(activities.sectionId, courseSections.id))
+                .innerJoin(courses, eq(courseSections.courseId, courses.id))
+                .innerJoin(projects, eq(courses.projectId, projects.id))
+                .where(eq(activities.templateId, id))
+                .all()
+
+              // Test migration on all activities first
+              const migrationResults: Array<{ activityId: string, activityName: string, success: boolean, error?: string }> = []
+
+              for (const activity of affectedActivities) {
+                const oldData = activity.data as Record<string, unknown> ?? {}
+                const migrationResult = await runMigration(migrationFn, oldData)
+
+                if (!migrationResult.success) {
+                  migrationResults.push({
+                    activityId: activity.id,
+                    activityName: activity.name,
+                    success: false,
+                    error: migrationResult.error,
+                  })
+                  continue
+                }
+
+                // Validate against new schema
+                const validation = validateDataAgainstSchema(
+                  migrationResult.data,
+                  pending.inputSchema as TemplateField[],
+                )
+
+                if (!validation.success) {
+                  migrationResults.push({
+                    activityId: activity.id,
+                    activityName: activity.name,
+                    success: false,
+                    error: `Validation failed: ${validation.errors.join(', ')}`,
+                  })
+                }
+                else {
+                  migrationResults.push({
+                    activityId: activity.id,
+                    activityName: activity.name,
+                    success: true,
+                  })
+                }
+              }
+
+              // Check if all migrations succeeded
+              const failures = migrationResults.filter(r => !r.success)
+              if (failures.length > 0) {
+                return {
+                  success: false,
+                  error: 'Migration validation failed for some activities. Fix the migration function and try again.',
+                  failures: failures.map(f => ({
+                    activity: f.activityName,
+                    error: f.error,
+                  })),
+                }
+              }
+
+              // All passed - commit the changes
+              // 1. Create new version snapshot
+              db.insert(templateVersions).values({
+                id: crypto.randomUUID(),
+                templateId: id,
+                version: newVersion,
+                inputSchema: pending.inputSchema,
+                component: pending.component,
+                sampleData: pending.sampleData,
+                dependencies: pending.dependencies,
+                tools: pending.tools,
+                createdAt: new Date(),
+              }).run()
+
+              // 2. Store migration function
+              db.insert(templateMigrations).values({
+                id: crypto.randomUUID(),
+                templateId: id,
+                fromVersion: current.schemaVersion,
+                toVersion: newVersion,
+                migrationFn,
+                createdAt: new Date(),
+              }).run()
+
+              // 3. Update template to new version
+              db.update(templates)
+                .set({
+                  schemaVersion: newVersion,
+                  inputSchema: pending.inputSchema,
+                  component: pending.component,
+                  sampleData: pending.sampleData,
+                  dependencies: pending.dependencies,
+                  tools: pending.tools,
+                  componentLastModifiedAt: new Date(),
+                  componentLastReadAt: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(templates.id, id))
+                .run()
+
+              // 4. Migrate all activities
+              for (const activity of affectedActivities) {
+                const oldData = activity.data as Record<string, unknown> ?? {}
+                const result = await runMigration(migrationFn, oldData)
+
+                // We already validated all migrations above, so this should always succeed
+                if (!result.success) {
+                  // This shouldn't happen since we validated, but handle it gracefully
+                  return {
+                    success: false,
+                    error: `Unexpected migration error for activity "${activity.name}": ${result.error}`,
+                  }
+                }
+
+                db.update(activities)
+                  .set({
+                    data: result.data,
+                    dataSchemaVersion: newVersion,
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(activities.id, activity.id))
+                  .run()
+              }
+
+              // 5. Clear pending changes
+              db.delete(templatePendingChanges)
+                .where(eq(templatePendingChanges.templateId, id))
+                .run()
+
+              return {
+                success: true,
+                schemaVersion: newVersion,
+                migratedActivities: affectedActivities.length,
+              }
+            }
+            else {
+              // action === 'skip'
+              // Create new version but don't migrate activities - they stay on old version
+
+              // 1. Create new version snapshot
+              db.insert(templateVersions).values({
+                id: crypto.randomUUID(),
+                templateId: id,
+                version: newVersion,
+                inputSchema: pending.inputSchema,
+                component: pending.component,
+                sampleData: pending.sampleData,
+                dependencies: pending.dependencies,
+                tools: pending.tools,
+                createdAt: new Date(),
+              }).run()
+
+              // 2. Update template to new version
+              db.update(templates)
+                .set({
+                  schemaVersion: newVersion,
+                  inputSchema: pending.inputSchema,
+                  component: pending.component,
+                  sampleData: pending.sampleData,
+                  dependencies: pending.dependencies,
+                  tools: pending.tools,
+                  componentLastModifiedAt: new Date(),
+                  componentLastReadAt: null,
+                  updatedAt: new Date(),
+                })
+                .where(eq(templates.id, id))
+                .run()
+
+              // 3. Clear pending changes
+              db.delete(templatePendingChanges)
+                .where(eq(templatePendingChanges.templateId, id))
+                .run()
+
+              // Count activities that will remain on old version
+              const oldVersionActivities = db
+                .select({ count: activities.id })
+                .from(activities)
+                .where(eq(activities.templateId, id))
+                .all()
+
+              return {
+                success: true,
+                schemaVersion: newVersion,
+                skippedActivities: oldVersionActivities.length,
+                message: `Template updated to version ${newVersion}. ${oldVersionActivities.length} existing activities remain on version ${current.schemaVersion} and can be upgraded individually later.`,
+              }
+            }
           },
         }),
       },

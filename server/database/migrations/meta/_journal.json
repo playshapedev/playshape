@@ -162,6 +162,13 @@
       "when": 1771718277765,
       "tag": "0022_add_activity_stale_context_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1771720743877,
+      "tag": "0023_template_versioning",
+      "breakpoints": true
     }
   ]
 }

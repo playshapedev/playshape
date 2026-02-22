@@ -66,6 +66,10 @@ export const activities = sqliteTable('activities', {
   data: text('data', { mode: 'json' }).$type<Record<string, unknown>>(),
   messages: text('messages', { mode: 'json' }).$type<TemplateMessage[]>(),
   sortOrder: integer('sort_order').notNull().default(0),
+  // Template version this activity's data conforms to
+  dataSchemaVersion: integer('data_schema_version').notNull().default(1),
+  // Schema version when chat conversation started (for consistency during editing)
+  chatSchemaVersion: integer('chat_schema_version'),
   // Stale context detection for AI chat
   dataLastReadAt: integer('data_last_read_at', { mode: 'timestamp_ms' }),
   dataLastModifiedAt: integer('data_last_modified_at', { mode: 'timestamp_ms' }),
@@ -253,6 +257,8 @@ export const templates = sqliteTable('templates', {
   dependencies: text('dependencies', { mode: 'json' }).$type<TemplateDependency[]>(),
   // Activity tools provided by the host application (e.g. "code-editor")
   tools: text('tools', { mode: 'json' }).$type<string[]>(),
+  // Current schema version — increments when inputSchema changes structurally
+  schemaVersion: integer('schema_version').notNull().default(1),
   // Chat conversation history for resuming AI-assisted editing
   messages: text('messages', { mode: 'json' }).$type<TemplateMessage[]>(),
   // Base64-encoded PNG thumbnail captured from an offscreen Electron BrowserWindow
@@ -263,6 +269,54 @@ export const templates = sqliteTable('templates', {
   componentLastModifiedAt: integer('component_last_modified_at', { mode: 'timestamp_ms' }),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Template Versions ───────────────────────────────────────────────────────
+// Complete snapshots of each template version. When the inputSchema changes,
+// a new version is created. Activities reference a specific version so they
+// can continue working even as the template evolves.
+
+export const templateVersions = sqliteTable('template_versions', {
+  id: text('id').primaryKey(),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  inputSchema: text('input_schema', { mode: 'json' }).$type<TemplateField[]>(),
+  component: text('component'),
+  sampleData: text('sample_data', { mode: 'json' }).$type<Record<string, unknown>>(),
+  dependencies: text('dependencies', { mode: 'json' }).$type<TemplateDependency[]>(),
+  tools: text('tools', { mode: 'json' }).$type<string[]>(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Template Migrations ─────────────────────────────────────────────────────
+// JavaScript functions that transform activity data from one schema version to
+// another. Each migration is a function body that receives `data` and returns
+// the transformed data. Executed in an isolated-vm sandbox for safety.
+
+export const templateMigrations = sqliteTable('template_migrations', {
+  id: text('id').primaryKey(),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' }),
+  fromVersion: integer('from_version').notNull(),
+  toVersion: integer('to_version').notNull(),
+  migrationFn: text('migration_fn').notNull(), // JS function body
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Template Pending Changes ────────────────────────────────────────────────
+// Temporary storage for schema changes that require user confirmation before
+// committing. When update_template detects a breaking schema change and there
+// are existing activities, the changes are stored here until the user decides
+// whether to migrate existing activities or leave them on the old version.
+
+export const templatePendingChanges = sqliteTable('template_pending_changes', {
+  id: text('id').primaryKey(),
+  templateId: text('template_id').notNull().references(() => templates.id, { onDelete: 'cascade' }),
+  inputSchema: text('input_schema', { mode: 'json' }).$type<TemplateField[]>(),
+  component: text('component'),
+  sampleData: text('sample_data', { mode: 'json' }).$type<Record<string, unknown>>(),
+  dependencies: text('dependencies', { mode: 'json' }).$type<TemplateDependency[]>(),
+  tools: text('tools', { mode: 'json' }).$type<string[]>(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
 // ─── Template Types (used by JSON columns) ───────────────────────────────────

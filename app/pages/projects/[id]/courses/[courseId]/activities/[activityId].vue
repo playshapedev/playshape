@@ -102,6 +102,39 @@ async function handleClearChat() {
   }
 }
 
+// ─── Upgrade ─────────────────────────────────────────────────────────────────
+
+const upgradeAvailable = computed(() => activity.value?.template?.upgradeAvailable ?? false)
+const currentVersion = computed(() => activity.value?.template?.schemaVersion ?? 1)
+const latestVersion = computed(() => activity.value?.template?.latestSchemaVersion ?? currentVersion.value)
+
+const showUpgradeModal = ref(false)
+const upgrading = ref(false)
+
+async function handleUpgrade() {
+  if (!activity.value) return
+  upgrading.value = true
+  try {
+    await $fetch(`/api/projects/${projectId}/courses/${courseId}/activities/${activityId}/upgrade`, {
+      method: 'POST',
+    })
+    showUpgradeModal.value = false
+    await refresh()
+    toast.add({
+      title: 'Activity upgraded',
+      description: `Upgraded to template v${latestVersion.value}`,
+      color: 'success',
+    })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Upgrade failed', description: message, color: 'error' })
+  }
+  finally {
+    upgrading.value = false
+  }
+}
+
 // ─── Layout ──────────────────────────────────────────────────────────────────
 
 const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
@@ -318,6 +351,16 @@ watch(formData, () => {
 <template>
   <!-- Navbar actions -->
   <Teleport defer to="#navbar-actions">
+    <!-- Upgrade available indicator -->
+    <UTooltip v-if="upgradeAvailable" :text="`Upgrade to v${latestVersion}`">
+      <UButton
+        icon="i-lucide-arrow-up-circle"
+        color="warning"
+        variant="soft"
+        size="sm"
+        @click="showUpgradeModal = true"
+      />
+    </UTooltip>
     <UTooltip text="Swap layout">
       <UButton
         :icon="chatPosition === 'left' ? 'i-lucide-panel-right-open' : 'i-lucide-panel-left-open'"
@@ -470,6 +513,17 @@ watch(formData, () => {
     confirm-color="error"
     :loading="clearing"
     @confirm="handleClearChat"
+  />
+
+  <!-- Upgrade confirmation -->
+  <ConfirmModal
+    v-model:open="showUpgradeModal"
+    title="Upgrade Activity"
+    :description="`Upgrade this activity from template v${currentVersion} to v${latestVersion}. Your data will be automatically migrated to the new format.`"
+    confirm-label="Upgrade"
+    confirm-color="primary"
+    :loading="upgrading"
+    @confirm="handleUpgrade"
   />
 
   <!-- Data form slideover -->

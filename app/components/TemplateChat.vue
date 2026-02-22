@@ -9,8 +9,8 @@ import type { Chat } from '@ai-sdk/vue'
 export interface ToolIndicator {
   /** Label shown while the tool is executing */
   loadingLabel: string | ((input: Record<string, unknown>) => string)
-  /** Label shown when execution completes successfully */
-  doneLabel?: string | ((input: Record<string, unknown>, output: Record<string, unknown>) => string)
+  /** Label shown when execution completes successfully. Return undefined for silent completion. */
+  doneLabel?: string | ((input: Record<string, unknown>, output: Record<string, unknown>) => string | undefined)
   /** Icon shown on completion (defaults to check-circle) */
   doneIcon?: string
   /** Whether to show the failure state with retry messaging */
@@ -46,23 +46,59 @@ const props = withDefaults(defineProps<{
   toolIndicators: () => ({
     'tool-update_template': {
       loadingLabel: 'Updating template...',
-      doneLabel: 'Template updated',
+      doneLabel: (input: Record<string, unknown>, output: Record<string, unknown>) => {
+        if (output?.schemaChangeDetected) {
+          const count = output.affectedActivitiesCount as number
+          return `Schema change affects ${count} activit${count === 1 ? 'y' : 'ies'}`
+        }
+        if (output?.versionBumped) return `Template updated to v${output.schemaVersion}`
+        return 'Template updated'
+      },
       showFailure: true,
-      failLabel: 'Patch failed — retrying...',
+      failLabel: 'Update failed — retrying...',
     },
     'tool-patch_component': {
       loadingLabel: 'Patching component...',
-      doneLabel: 'Template updated',
+      doneLabel: (input: Record<string, unknown>, output: Record<string, unknown>) => {
+        if (output?.schemaChangeDetected) {
+          const count = output.affectedActivitiesCount as number
+          return `Schema change affects ${count} activit${count === 1 ? 'y' : 'ies'}`
+        }
+        if (output?.versionBumped) return `Template updated to v${output.schemaVersion}`
+        return 'Template updated'
+      },
       showFailure: true,
       failLabel: 'Patch failed — retrying...',
     },
     'tool-get_template': {
       loadingLabel: 'Reading template...',
+      doneLabel: (input: Record<string, unknown>, output: Record<string, unknown>) => {
+        if (output?.hasPendingChanges) return 'Template loaded (pending changes)'
+        return undefined // silent completion
+      },
     },
     'tool-get_reference': {
       loadingLabel: (input: Record<string, unknown>) => `Reading ${input?.topic || 'reference'} docs...`,
       doneLabel: (input: Record<string, unknown>) => `Loaded ${input?.topic || 'reference'} docs`,
       doneIcon: 'i-lucide-book-open',
+    },
+    'tool-commit_schema_change': {
+      loadingLabel: (input: Record<string, unknown>) => {
+        if (input?.action === 'migrate') return 'Migrating activities...'
+        return 'Updating template version...'
+      },
+      doneLabel: (input: Record<string, unknown>, output: Record<string, unknown>) => {
+        if (!output?.success) return undefined // failure handled separately
+        if (input?.action === 'migrate') {
+          const count = output.migratedActivities as number
+          return `Migrated ${count} activit${count === 1 ? 'y' : 'ies'} to v${output.schemaVersion}`
+        }
+        const skipped = output.skippedActivities as number
+        return `Template v${output.schemaVersion} — ${skipped} activit${skipped === 1 ? 'y stays' : 'ies stay'} on old version`
+      },
+      doneIcon: 'i-lucide-git-branch',
+      showFailure: true,
+      failLabel: 'Migration failed — see error details',
     },
   }),
   placeholder: 'Describe your activity...',
@@ -552,9 +588,16 @@ watch(() => visibleMessages.value.length, (count) => {
                     {{ toolIndicators[part.type]!.failLabel || 'Failed — retrying...' }}
                   </div>
 
-                  <!-- Tool complete (success) — only show if doneLabel is defined -->
+                  <!-- Tool complete (success) — only show if doneLabel evaluates to a truthy value -->
                   <div
-                    v-else-if="toolIndicators[part.type]!.doneLabel"
+                    v-else-if="(() => {
+                      const indicator = toolIndicators[part.type]!
+                      if (!indicator.doneLabel) return false
+                      if (typeof indicator.doneLabel === 'function') {
+                        return indicator.doneLabel((part as any).input ?? {}, (part as any).output ?? {})
+                      }
+                      return indicator.doneLabel
+                    })()"
                     class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
                   >
                     <UIcon
@@ -566,7 +609,7 @@ watch(() => visibleMessages.value.length, (count) => {
                       : toolIndicators[part.type]!.doneLabel }}
                   </div>
 
-                  <!-- Tool complete with no doneLabel — render nothing (silent completion) -->
+                  <!-- Tool complete with no doneLabel or function returned undefined — render nothing -->
                 </template>
 
                 <!-- Tool indicators for tools NOT in config — silently skip -->
