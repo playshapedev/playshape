@@ -171,6 +171,7 @@ const input = ref('')
 const customAnswer = ref('')
 const showCustomInput = ref(false)
 const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
+const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
 const innerWrapperRef = ref<HTMLElement | null>(null)
 
@@ -416,6 +417,8 @@ function onPaste(event: ClipboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('paste', onPaste)
+  // Autofocus the input
+  nextTick(() => textareaRef.value?.textarea?.focus())
 
   if (messagesContainer.value) {
     // Track container (viewport) height for spacer calculations
@@ -796,6 +799,7 @@ onUnmounted(() => {
         />
 
         <UTextarea
+          ref="textareaRef"
           v-model="input"
           placeholder="Describe the image you want..."
           class="flex-1 font-mono text-sm"

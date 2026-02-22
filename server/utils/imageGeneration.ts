@@ -135,6 +135,8 @@ export async function generateImage(
       return generateWithFal(prompt, config, aspectRatio, referenceImage)
     case 'openai':
       return generateWithOpenAI(prompt, config, aspectRatio, referenceImage)
+    case 'together':
+      return generateWithTogether(prompt, config, aspectRatio, referenceImage)
     default:
       throw createError({
         statusCode: 400,
@@ -534,6 +536,104 @@ async function generateWithOpenAIEdit(
 
   // Handle URL response - download the image
   return downloadImage(response.data[0].url!)
+}
+
+// ─── Together AI ─────────────────────────────────────────────────────────────
+// Together AI uses their own API format for image generation
+
+function aspectRatioToTogetherSize(aspectRatio: string): { width: number; height: number } {
+  // Together AI FLUX models support various sizes
+  // Common sizes: 1024x1024, 1024x768, 768x1024, 1280x720, 720x1280
+  switch (aspectRatio) {
+    case '16:9':
+      return { width: 1280, height: 720 }
+    case '9:16':
+      return { width: 720, height: 1280 }
+    case '21:9':
+      return { width: 1280, height: 544 } // Approximation
+    case '4:3':
+      return { width: 1024, height: 768 }
+    case '3:4':
+      return { width: 768, height: 1024 }
+    case '1:1':
+    default:
+      return { width: 1024, height: 1024 }
+  }
+}
+
+async function generateWithTogether(
+  prompt: string,
+  config: ImageModelConfig,
+  aspectRatio: string,
+  referenceImage?: ReferenceImage,
+): Promise<ImageGenerationResult> {
+  if (!config.apiKey) {
+    throw createError({ statusCode: 400, statusMessage: 'Together AI API key is required' })
+  }
+
+  // Together doesn't support image-to-image for most models
+  if (referenceImage) {
+    console.warn(`[ImageGeneration] Together AI model ${config.modelId} does not support image-to-image. Generating from prompt only.`)
+  }
+
+  const { width, height } = aspectRatioToTogetherSize(aspectRatio)
+
+  const response = await fetch('https://api.together.xyz/v1/images/generations', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: config.modelId,
+      prompt,
+      width,
+      height,
+      n: 1,
+      response_format: 'b64_json',
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: { message: response.statusText } })) as { error?: { message?: string } }
+    throw createError({
+      statusCode: response.status,
+      statusMessage: error.error?.message || `Together AI image generation failed: ${response.statusText}`,
+    })
+  }
+
+  const result = await response.json() as {
+    data?: Array<{ b64_json?: string; url?: string }>
+  }
+
+  const imageData = result.data?.[0]
+  if (!imageData) {
+    throw createError({
+      statusCode: 500,
+      statusMessage: 'No image data in Together AI response',
+    })
+  }
+
+  // Handle base64 response
+  if (imageData.b64_json) {
+    const buffer = Buffer.from(imageData.b64_json, 'base64')
+    const dimensions = getImageDimensions(buffer)
+    return {
+      buffer,
+      mimeType: 'image/png',
+      ...dimensions,
+    }
+  }
+
+  // Handle URL response
+  if (imageData.url) {
+    return downloadImage(imageData.url)
+  }
+
+  throw createError({
+    statusCode: 500,
+    statusMessage: 'No image data in Together AI response',
+  })
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

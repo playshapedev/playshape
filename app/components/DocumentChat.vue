@@ -27,6 +27,7 @@ const input = ref('')
 const customAnswer = ref('')
 const showCustomInput = ref(false)
 const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
+const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
 
 // Arrow key navigation for question options
 const selectedOptionIndex = ref(0)
@@ -116,6 +117,8 @@ function onKeyDown(e: KeyboardEvent) {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  // Autofocus the input
+  nextTick(() => textareaRef.value?.textarea?.focus())
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
@@ -513,6 +516,7 @@ watch(() => chatInstance.messages.length, (count) => {
     <div v-else class="border-t border-default p-3">
       <div class="flex gap-2 pl-3 border-l-2 border-primary bg-primary/5 rounded-r-lg">
         <UTextarea
+          ref="textareaRef"
           v-model="input"
           placeholder="Describe what you want to create or change..."
           :rows="1"

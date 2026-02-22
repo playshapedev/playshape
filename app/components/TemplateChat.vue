@@ -188,6 +188,7 @@ const input = ref('')
 const customAnswer = ref('')
 const showCustomInput = ref(false)
 const customInputRef = ref<{ el: HTMLInputElement } | null>(null)
+const textareaRef = ref<{ textarea: HTMLTextAreaElement } | null>(null)
 
 // Arrow key navigation for question options
 const selectedOptionIndex = ref(0)
@@ -278,6 +279,8 @@ function onKeyDown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
   window.addEventListener('paste', onPaste)
+  // Autofocus the input
+  nextTick(() => textareaRef.value?.textarea?.focus())
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
@@ -840,6 +843,7 @@ watch(() => visibleMessages.value.length, (count) => {
         />
 
         <UTextarea
+          ref="textareaRef"
           v-model="input"
           :placeholder="placeholder"
           class="flex-1 font-mono text-sm"
