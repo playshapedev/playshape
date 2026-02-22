@@ -298,16 +298,37 @@ async function discoverTogetherModels(apiKey: string): Promise<ModelInfo[]> {
       type?: string
     }>
 
-    // Filter to chat/language models
-    return data
-      .filter(m => m.type === 'chat' || m.type === 'language')
-      .map(m => ({
-        id: m.id,
-        name: m.display_name || m.id.split('/').pop() || m.id,
-        description: m.context_length ? `${Math.round(m.context_length / 1024)}k context` : undefined,
-        purpose: 'text' as const,
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name))
+    const models: ModelInfo[] = []
+
+    // Text models (chat/language)
+    for (const m of data) {
+      if (m.type === 'chat' || m.type === 'language') {
+        models.push({
+          id: m.id,
+          name: m.display_name || m.id.split('/').pop() || m.id,
+          description: m.context_length ? `${Math.round(m.context_length / 1024)}k context` : undefined,
+          purpose: 'text',
+        })
+      }
+    }
+
+    // Image models
+    for (const m of data) {
+      if (m.type === 'image') {
+        models.push({
+          id: m.id,
+          name: m.display_name || m.id.split('/').pop() || m.id,
+          description: 'Image generation',
+          purpose: 'image',
+        })
+      }
+    }
+
+    return models.sort((a, b) => {
+      // Sort by purpose (text first), then by name
+      if (a.purpose !== b.purpose) return a.purpose === 'text' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
   }
   catch {
     return getTogetherModelsFallback()
@@ -316,6 +337,7 @@ async function discoverTogetherModels(apiKey: string): Promise<ModelInfo[]> {
 
 function getTogetherModelsFallback(): ModelInfo[] {
   return [
+    // Text models
     { id: 'meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8', name: 'Llama 4 Maverick 17B', description: '128k context', purpose: 'text' },
     { id: 'meta-llama/Llama-4-Scout-17B-16E-Instruct', name: 'Llama 4 Scout 17B', description: 'Fast and efficient', purpose: 'text' },
     { id: 'meta-llama/Meta-Llama-3.3-70B-Instruct-Turbo', name: 'Llama 3.3 70B Turbo', description: '128k context', purpose: 'text' },
@@ -324,5 +346,12 @@ function getTogetherModelsFallback(): ModelInfo[] {
     { id: 'Qwen/Qwen2.5-72B-Instruct-Turbo', name: 'Qwen 2.5 72B Turbo', description: 'Multilingual', purpose: 'text' },
     { id: 'mistralai/Mixtral-8x22B-Instruct-v0.1', name: 'Mixtral 8x22B', description: 'MoE architecture', purpose: 'text' },
     { id: 'google/gemma-2-27b-it', name: 'Gemma 2 27B', description: 'Efficient Google model', purpose: 'text' },
+    // Image models
+    { id: 'black-forest-labs/FLUX.1-schnell-Free', name: 'FLUX.1 Schnell (Free)', description: 'Fast image generation', purpose: 'image' },
+    { id: 'black-forest-labs/FLUX.1-schnell', name: 'FLUX.1 Schnell', description: 'Fast image generation', purpose: 'image' },
+    { id: 'black-forest-labs/FLUX.1-dev', name: 'FLUX.1 Dev', description: 'Development model', purpose: 'image' },
+    { id: 'black-forest-labs/FLUX.1-pro', name: 'FLUX.1 Pro', description: 'High quality', purpose: 'image' },
+    { id: 'black-forest-labs/FLUX.1.1-pro', name: 'FLUX 1.1 Pro', description: 'Latest high quality', purpose: 'image' },
+    { id: 'stabilityai/stable-diffusion-xl-base-1.0', name: 'Stable Diffusion XL', description: 'SDXL base model', purpose: 'image' },
   ]
 }
