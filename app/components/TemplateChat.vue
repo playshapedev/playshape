@@ -853,7 +853,7 @@ watch(() => visibleMessages.value.length, (count) => {
           :maxrows="6"
           :disabled="isRunning || isUploading"
           @keydown.enter.exact.prevent="handleSend"
-          @keydown.escape="isRunning && stopGeneration()"
+          @keydown.escape="stopGeneration()"
         />
         <div class="flex items-end py-1 pr-1">
           <!-- Stop button while running -->

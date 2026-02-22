@@ -525,6 +525,7 @@ watch(() => chatInstance.messages.length, (count) => {
           variant="none"
           :disabled="isRunning"
           @keydown.enter.exact.prevent="handleSend"
+          @keydown.escape="stopGeneration()"
         />
         <div class="flex items-end py-1 pr-1">
           <UButton
