@@ -765,8 +765,8 @@ function shouldShowToolDone(toolType: string, input: Record<string, unknown>, ou
         </div>
 
         <!-- Loading indicator (show when waiting or streaming without visible text yet) -->
-        <div v-if="showThinking" class="flex items-center gap-2 font-mono text-sm text-muted">
-          <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
+        <div v-if="showThinking" class="flex items-center gap-1.5 text-xs text-muted">
+          <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
           <span>Thinking...</span>
         </div>
 
