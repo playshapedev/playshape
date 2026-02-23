@@ -631,7 +631,10 @@ function shouldShowToolDone(toolType: string, input: Record<string, unknown>, ou
   <div class="flex flex-col h-full overflow-hidden">
     <!-- Header slot + token usage -->
     <div v-if="$slots.header || tokenUsage.totalTokens || tokenUsage.contextTokens" class="flex items-center justify-between px-3 py-1.5 border-b border-default">
-      <slot name="header" />
+      <slot name="header">
+        <!-- Empty div to push token usage to the right when no header content -->
+        <div />
+      </slot>
       <ChatTokenUsage
         v-if="tokenUsage.totalTokens || tokenUsage.contextTokens"
         :total-tokens="tokenUsage.totalTokens"
