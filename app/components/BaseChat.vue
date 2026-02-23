@@ -110,12 +110,12 @@ const isRunning = computed(() =>
 )
 
 // Check if we should show "Thinking..." indicator
-// Show when: submitted, OR streaming but last assistant message has no text content yet
+// Show when: submitted, OR streaming but last assistant message has no visible content yet
 const showThinking = computed(() => {
   if (props.chat.status === 'submitted') return true
   if (props.chat.status !== 'streaming') return false
 
-  // During streaming, check if the last assistant message has any text content
+  // During streaming, check if the last assistant message has any visible content
   const msgs = props.chat.messages
   if (!msgs.length) return true
 
@@ -127,7 +127,16 @@ const showThinking = computed(() => {
     (part: { type: string; text?: string }) =>
       part.type === 'text' && part.text && part.text.trim().length > 0,
   )
-  return !hasText
+  if (hasText) return false
+
+  // Check if any tool is in progress (showing a loading indicator)
+  const hasToolInProgress = lastMsg.parts.some(
+    (part: { type: string; state?: string }) =>
+      part.type.startsWith('tool-') && part.state !== 'output-available',
+  )
+  if (hasToolInProgress) return false
+
+  return true
 })
 
 // ─── Multi-Question State ────────────────────────────────────────────────────
