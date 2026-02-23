@@ -223,44 +223,8 @@ export default defineLazyEventHandler(() => {
                 }
               }
 
-              // No affected activities - can proceed with version bump
-              const newVersion = current.schemaVersion + 1
-
-              // Create new version snapshot
-              db.insert(templateVersions).values({
-                id: crypto.randomUUID(),
-                templateId: id,
-                version: newVersion,
-                inputSchema: fields as TemplateField[],
-                component,
-                sampleData,
-                dependencies: (dependencies as TemplateDependency[]) || [],
-                tools: toolIds || [],
-                createdAt: new Date(),
-              }).run()
-
-              // Update template
-              db.update(templates)
-                .set({
-                  schemaVersion: newVersion,
-                  inputSchema: fields as TemplateField[],
-                  component,
-                  sampleData,
-                  dependencies: (dependencies as TemplateDependency[]) || [],
-                  tools: toolIds || [],
-                  componentLastModifiedAt: new Date(),
-                  componentLastReadAt: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(templates.id, id))
-                .run()
-
-              // Check for warnings (non-blocking)
-              const warnings = validateTemplate(fields as TemplateField[], sampleData as Record<string, unknown>, component)
-              if (warnings.length > 0) {
-                return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
-              }
-              return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true }
+              // No affected activities - schema can change without versioning
+              // Just update the template and current version snapshot (same as non-schema-change path)
             }
 
             // No schema change - update template and current version snapshot
@@ -456,54 +420,13 @@ export default defineLazyEventHandler(() => {
               patched = patched.substring(0, firstIdx) + replace + patched.substring(firstIdx + search.length)
             }
 
-            // Check if this is a schema version bump (fields changed but no affected activities)
-            const schemaChanged = fields && hasSchemaChanged(
-              current.inputSchema as TemplateField[] | null,
-              fields as TemplateField[],
-            )
-
-            if (schemaChanged) {
-              // No affected activities - can proceed with version bump
-              const newVersion = current.schemaVersion + 1
-
-              // Create new version snapshot
-              db.insert(templateVersions).values({
-                id: crypto.randomUUID(),
-                templateId: id,
-                version: newVersion,
-                inputSchema: fields as TemplateField[],
-                component: patched,
-                sampleData: sampleData ?? current.sampleData,
-                dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
-                tools: toolIds ?? current.tools ?? [],
-                createdAt: new Date(),
-              }).run()
-
-              // Update template
-              db.update(templates)
-                .set({
-                  schemaVersion: newVersion,
-                  inputSchema: fields as TemplateField[],
-                  component: patched,
-                  sampleData: sampleData ?? current.sampleData,
-                  dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
-                  tools: toolIds ?? current.tools ?? [],
-                  componentLastModifiedAt: new Date(),
-                  componentLastReadAt: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(templates.id, id))
-                .run()
-
-              // Check for warnings (non-blocking)
-              const finalFields = fields as TemplateField[]
-              const finalSampleData = (sampleData ?? current.sampleData) as Record<string, unknown>
-              const warnings = validateTemplate(finalFields, finalSampleData, patched)
-              if (warnings.length > 0) {
-                return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
-              }
-              return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true }
-            }
+            // Note: Schema changes without affected activities don't need versioning.
+            // The check for affected activities happens earlier (line ~354) and returns
+            // with schemaChangeDetected if there are activities to consider.
+            // If we reach here, either:
+            // 1. Schema hasn't changed, or
+            // 2. Schema changed but no activities use this template
+            // In both cases, we just update the template directly without version bump.
 
             // Build the update payload — only include fields that were provided
             const updatePayload: Record<string, unknown> = {

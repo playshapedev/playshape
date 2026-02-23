@@ -381,8 +381,10 @@ function onPreviewError(error: string | null) {
  */
 async function onTemplateUpdated() {
   await refresh()
-  // Generate thumbnail in the background — don't block the UI
-  generateAndSaveThumbnail()
+  // Wait for Vue to re-render and the preview iframe to update
+  // The iframe needs time to compile and render the new component
+  await nextTick()
+  setTimeout(() => generateAndSaveThumbnail(), 500)
 }
 
 async function generateAndSaveThumbnail() {
