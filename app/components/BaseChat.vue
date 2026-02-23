@@ -109,6 +109,27 @@ const isRunning = computed(() =>
   props.chat.status === 'streaming' || props.chat.status === 'submitted',
 )
 
+// Check if we should show "Thinking..." indicator
+// Show when: submitted, OR streaming but last assistant message has no text content yet
+const showThinking = computed(() => {
+  if (props.chat.status === 'submitted') return true
+  if (props.chat.status !== 'streaming') return false
+
+  // During streaming, check if the last assistant message has any text content
+  const msgs = props.chat.messages
+  if (!msgs.length) return true
+
+  const lastMsg = msgs[msgs.length - 1]
+  if (!lastMsg || lastMsg.role !== 'assistant') return true
+
+  // Check if any part has visible text
+  const hasText = lastMsg.parts.some(
+    (part: { type: string; text?: string }) =>
+      part.type === 'text' && part.text && part.text.trim().length > 0,
+  )
+  return !hasText
+})
+
 // ─── Multi-Question State ────────────────────────────────────────────────────
 
 const activeQuestionIndex = ref(0)
@@ -734,8 +755,8 @@ function shouldShowToolDone(toolType: string, input: Record<string, unknown>, ou
           <span>{{ tokenUsage.compactionMessage }}</span>
         </div>
 
-        <!-- Loading indicator -->
-        <div v-if="chat.status === 'submitted'" class="flex items-center gap-2 font-mono text-sm text-muted">
+        <!-- Loading indicator (show when waiting or streaming without visible text yet) -->
+        <div v-if="showThinking" class="flex items-center gap-2 font-mono text-sm text-muted">
           <UIcon name="i-lucide-loader-2" class="size-4 animate-spin" />
           <span>Thinking...</span>
         </div>
