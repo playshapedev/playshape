@@ -1,7 +1,7 @@
 import { brands } from '~~/server/database/schema'
-import { desc } from 'drizzle-orm'
+import { asc } from 'drizzle-orm'
 
 export default defineEventHandler(() => {
   const db = useDb()
-  return db.select().from(brands).orderBy(desc(brands.updatedAt)).all()
+  return db.select().from(brands).orderBy(asc(brands.createdAt)).all()
 })

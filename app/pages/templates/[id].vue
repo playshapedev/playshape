@@ -135,6 +135,7 @@ const selectedBrand = computed(() =>
   allBrands.value?.find(b => b.id === selectedBrandId.value) ?? null,
 )
 
+// Only show brand menu when there are multiple brands to choose from
 const brandMenuItems = computed(() => {
   const brands = (allBrands.value || []).map(b => ({
     label: b.isDefault ? `${b.name} (Default)` : b.name,
@@ -142,14 +143,7 @@ const brandMenuItems = computed(() => {
     onSelect: () => { selectedBrandId.value = b.id },
   }))
   if (!brands.length) return []
-  return [
-    brands,
-    [{
-      label: 'No brand',
-      trailingIcon: selectedBrandId.value === null ? 'i-lucide-check' : undefined,
-      onSelect: () => { selectedBrandId.value = null },
-    }],
-  ]
+  return [brands]
 })
 
 // ─── Interface: Activity Slot Preview ────────────────────────────────────────
@@ -507,14 +501,14 @@ async function generateAndSaveThumbnail() {
         @error="onPreviewError"
       >
         <template #header-actions>
-          <!-- Brand selector -->
-          <UDropdownMenu v-if="allBrands?.length" :items="brandMenuItems" size="xs">
-            <UTooltip :text="selectedBrand ? selectedBrand.name : 'Apply brand'">
+          <!-- Brand selector (only show when multiple brands exist) -->
+          <UDropdownMenu v-if="allBrands && allBrands.length > 1" :items="brandMenuItems" size="xs">
+            <UTooltip :text="selectedBrand?.name || 'Select brand'">
               <UButton
                 icon="i-lucide-palette"
                 size="xs"
                 variant="ghost"
-                :color="selectedBrand ? 'primary' : 'neutral'"
+                color="primary"
               />
             </UTooltip>
           </UDropdownMenu>
