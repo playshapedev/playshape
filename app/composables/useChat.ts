@@ -188,6 +188,37 @@ export function useChat(
     },
   })
 
+  // Track tool call IDs that have already triggered updates (to avoid duplicates)
+  const processedToolCallIds = new Set<string>()
+
+  // Watch for tool completions during streaming to trigger immediate updates
+  // This allows generated images to appear before the LLM finishes its response
+  if (updateToolTypes.length > 0) {
+    watch(
+      () => chat.messages,
+      (messages) => {
+        for (const msg of messages) {
+          if (msg.role !== 'assistant') continue
+
+          for (const part of msg.parts) {
+            if (!part.type.startsWith('tool-')) continue
+            if (!updateToolTypes.includes(part.type)) continue
+
+            const toolPart = part as { toolCallId?: string; state?: string }
+            if (toolPart.state !== 'output-available') continue
+            if (!toolPart.toolCallId) continue
+            if (processedToolCallIds.has(toolPart.toolCallId)) continue
+
+            // This tool just completed - trigger update immediately
+            processedToolCallIds.add(toolPart.toolCallId)
+            onUpdate.value?.()
+          }
+        }
+      },
+      { deep: true },
+    )
+  }
+
   /**
    * Send a message from the user, optionally with file attachments.
    * If currently streaming, the message is queued (up to MAX_QUEUE_SIZE).
