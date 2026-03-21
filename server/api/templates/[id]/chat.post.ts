@@ -7,6 +7,8 @@ import type { TemplateField, TemplateDependency } from '~~/server/database/schem
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { getReferenceTool } from '~~/server/utils/tools/getReference'
 import { fieldSchema } from '~~/server/utils/tools/fieldSchema'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { hasSchemaChanged } from '~~/server/utils/schemaEquality'
 import { runMigration, validateMigrationSyntax } from '~~/server/utils/runMigration'
 import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSchema'
@@ -55,6 +57,11 @@ export default defineLazyEventHandler(() => {
       throw createError({ statusCode: 404, statusMessage: 'Template not found' })
     }
 
+    // Default templates are immutable — no AI chat allowed
+    if (tmpl.source === 'default') {
+      throw createError({ statusCode: 403, statusMessage: 'Default templates cannot be edited. Use "Use Template" to create an editable copy.' })
+    }
+
     // Load system prompts (cached after first call)
     const prompts = await useSystemPrompts()
     const baseSystemPrompt = tmpl.kind === 'interface'
@@ -89,6 +96,8 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       get_reference: getReferenceTool,
+      write_todos: createWriteTodosTool('template', id),
+      get_todos: createGetTodosTool('template', id),
       get_template: tool({
         description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes. ALWAYS call this before making updates.',
         inputSchema: z.object({}),
@@ -770,7 +779,7 @@ export default defineLazyEventHandler(() => {
       model,
       system: systemPrompt,
       messages: compaction.messages,
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(8),
       tools,
       maxOutputTokens: 16384,
       onFinish: async ({ totalUsage }) => {

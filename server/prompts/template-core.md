@@ -1,3 +1,52 @@
+## Use Nuxt UI Components
+
+**You MUST use Nuxt UI components for all standard UI elements.** The preview iframe has 100+ pre-built components that are accessible, theme-aware, and require far less code. Never write raw HTML + Tailwind for buttons, cards, inputs, alerts, badges, tabs, progress bars, forms, or any element that Nuxt UI provides.
+
+Examples of what to use:
+- `<UButton>` for all buttons and clickable actions
+- `<UCard>` for content containers and question cards
+- `<UInput>` and `<UTextarea>` for text entry
+- `<UAlert>` for feedback messages, hints, and callouts
+- `<UBadge>` for labels, scores, and status indicators
+- `<UTabs>` for multi-section content
+- `<UProgress>` for progress bars and scores
+- `<UCheckbox>` and `<URadioGroup>` for multiple choice
+
+Only use raw HTML + Tailwind for custom visualizations, game mechanics, or layouts that Nuxt UI cannot handle. If you find yourself writing more than 5 Tailwind classes for a single element, you're probably reinventing a Nuxt UI component.
+
+## Dark Mode Support (REQUIRED)
+
+**Templates MUST work in both light and dark mode.** The preview can be toggled between modes, and exported activities may be viewed in either.
+
+**Rules:**
+1. **Use Nuxt UI components** — they handle dark mode automatically
+2. **Use semantic color classes** for custom elements:
+   - Text: `text-default`, `text-muted`, `text-dimmed` (NOT `text-gray-900`, `text-black`, `text-white`)
+   - Backgrounds: `bg-default`, `bg-muted`, `bg-elevated` (NOT `bg-white`, `bg-gray-100`)
+   - Borders: `border-default`, `border-muted` (NOT `border-gray-200`)
+3. **Never use hardcoded colors** like `text-black`, `text-white`, `bg-white`, `bg-gray-900` — these break in the opposite mode
+4. **For colored elements**, use Tailwind's color scale which adapts: `text-red-500`, `bg-blue-100` (these are fine)
+5. **Test mentally**: ask yourself "would this be readable on a dark background?"
+
+```vue
+<!-- CORRECT -->
+<div class="bg-elevated rounded-lg p-4 border border-default">
+  <h2 class="text-highlighted font-bold">Title</h2>
+  <p class="text-muted">Description text</p>
+</div>
+
+<!-- WRONG - breaks in dark mode -->
+<div class="bg-white rounded-lg p-4 border border-gray-200">
+  <h2 class="text-gray-900 font-bold">Title</h2>
+  <p class="text-gray-600">Description text</p>
+</div>
+```
+
+**Semantic color tokens available:**
+- Text: `text-default`, `text-muted`, `text-dimmed`, `text-toned`, `text-highlighted`, `text-inverted`
+- Background: `bg-default`, `bg-muted`, `bg-elevated`, `bg-accented`, `bg-inverted`
+- Border: `border-default`, `border-muted`, `border-accented`, `border-inverted`
+
 ## Content Editability Rule
 
 **Every piece of text that appears when the component renders MUST come from the `data` prop (i.e., from an input schema field) — never hardcoded in the component.** This is critical because templates are reusable: learning designers fill in data fields to create different activities from the same template. If text is hardcoded in the component, it cannot be customized without editing the code.
@@ -55,6 +104,20 @@ All `text` and `textarea` fields may contain Markdown formatting that the system
    - Code block: ` ```html\n<div>...</div>\n``` `
 
 **Security:** All content is sanitized by the system, so `v-html` is safe to use.
+
+## Icons
+
+Icons use the `i-lucide-{name}` format. Use them via `<UIcon>` or as props on Nuxt UI components.
+
+```vue
+<UIcon name="i-lucide-check" />
+<UButton icon="i-lucide-plus" label="Add" />
+<UAlert icon="i-lucide-info" title="Hint" />
+```
+
+**Common icons:** `check`, `x`, `plus`, `minus`, `arrow-right`, `arrow-left`, `chevron-right`, `chevron-down`, `star`, `heart`, `user`, `settings`, `search`, `info`, `alert-triangle`, `circle-check`, `circle-x`, `eye`, `edit`, `trash`, `copy`, `refresh-cw`, `play`, `pause`, `send`, `thumbs-up`, `thumbs-down`, `trophy`, `target`, `lightbulb`, `graduation-cap`, `book-open`, `message-circle`, `sparkles`
+
+**DO NOT invent icon names.** If unsure, use `i-lucide-circle` or omit the icon entirely.
 
 ## Workflow
 

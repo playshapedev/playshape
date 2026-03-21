@@ -53,3 +53,10 @@ export async function deleteTemplate(id: string) {
     method: 'DELETE',
   })
 }
+
+/** Create an editable user copy of a template (typically a default). */
+export async function copyTemplate(id: string) {
+  return $fetch<Template>(`/api/templates/${id}/copy`, {
+    method: 'POST',
+  })
+}

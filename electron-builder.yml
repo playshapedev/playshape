@@ -25,9 +25,18 @@ files:
 # outside the app bundle, so Drizzle can read them at runtime.
 # Prompts and UI references are bundled via Nitro serverAssets (unstorage)
 # and don't need extraResources.
+# Nuxt UI components are pre-built and served at runtime for template preview.
 extraResources:
   - from: server/database/migrations
     to: migrations
+    filter:
+      - "**/*"
+  - from: server/database/defaults
+    to: defaults
+    filter:
+      - "**/*"
+  - from: resources/nuxt-ui
+    to: nuxt-ui
     filter:
       - "**/*"
 

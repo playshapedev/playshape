@@ -16,6 +16,7 @@ data/
 # Build
 .cache/
 release/
+resources/nuxt-ui/
 
 # IDE
 .vscode/

@@ -11,6 +11,7 @@ const PROMPT_FILES = [
   'design-system',
   'course-api',
   'template-core',
+  'task-tracking',
   'activity',
   'interface',
   'activity-editor',
@@ -52,6 +53,7 @@ export async function useSystemPrompts() {
     p['design-system'],
     p['course-api'],
     p['template-core'],
+    p['task-tracking'],
   ].join('\n\n')
 
   return {
@@ -73,8 +75,9 @@ export async function useActivityEditorPrompt(): Promise<string> {
   const content = await storage.getItem<string>('activity-editor.md')
   if (!content) throw new Error('Prompt file not found in server assets: activity-editor.md')
 
-  activityEditorCache = content
-  return content
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  activityEditorCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return activityEditorCache
 }
 
 /**
@@ -89,8 +92,9 @@ export async function useDocumentGenerationPrompt(): Promise<string> {
   const content = await storage.getItem<string>('document-generation.md')
   if (!content) throw new Error('Prompt file not found in server assets: document-generation.md')
 
-  documentGenerationCache = content
-  return content
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  documentGenerationCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return documentGenerationCache
 }
 
 /**
@@ -105,8 +109,9 @@ export async function useAssetGenerationPrompt(): Promise<string> {
   const content = await storage.getItem<string>('asset-generation.md')
   if (!content) throw new Error('Prompt file not found in server assets: asset-generation.md')
 
-  assetGenerationCache = content
-  return content
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  assetGenerationCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return assetGenerationCache
 }
 
 /**

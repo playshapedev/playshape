@@ -1,10 +1,21 @@
 <script setup lang="ts">
-const { templates, pending } = useTemplates('activity')
+import type { Template } from '~/composables/useTemplates'
+
+const { templates: allTemplates, pending } = useTemplates('activity')
+
+// Split templates into user-created and defaults
+const userTemplates = computed(() =>
+  (allTemplates.value || []).filter(t => t.source !== 'default'),
+)
+const defaultTemplates = computed(() =>
+  (allTemplates.value || []).filter(t => t.source === 'default'),
+)
 
 const showCreateModal = ref(false)
 const newTemplateName = ref('')
 const newTemplateDescription = ref('')
 const creating = ref(false)
+const copying = ref(false)
 
 const toast = useToast()
 const router = useRouter()
@@ -35,6 +46,24 @@ async function handleCreate() {
     creating.value = false
   }
 }
+
+async function handleUseTemplate(tmpl: Template) {
+  if (copying.value) return
+  copying.value = true
+  try {
+    const copy = await copyTemplate(tmpl.id)
+    toast.add({ title: `Created from "${tmpl.name}"`, color: 'success' })
+    await clearNuxtData(getTemplatesKey('activity'))
+    await router.push(`/templates/${copy.id}`)
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to create copy', description: message, color: 'error' })
+  }
+  finally {
+    copying.value = false
+  }
+}
 </script>
 
 <template>
@@ -52,9 +81,9 @@ async function handleCreate() {
     <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-muted" />
   </div>
 
-  <!-- Empty state -->
+  <!-- Empty state (no templates at all — user or default) -->
   <EmptyState
-    v-else-if="!templates?.length"
+    v-else-if="!allTemplates?.length"
     icon="i-lucide-play-circle"
     title="No activity templates yet"
     description="Create reusable activity templates powered by AI conversation."
@@ -66,13 +95,35 @@ async function handleCreate() {
     />
   </EmptyState>
 
-  <!-- Template grid -->
-  <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-    <TemplateCard
-      v-for="tmpl in templates"
-      :key="tmpl.id"
-      :template="tmpl"
-    />
+  <div v-else class="space-y-8">
+    <!-- User templates -->
+    <div v-if="userTemplates.length" class="space-y-4">
+      <h2 v-if="defaultTemplates.length" class="text-sm font-medium text-muted uppercase tracking-wide">
+        My Templates
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <TemplateCard
+          v-for="tmpl in userTemplates"
+          :key="tmpl.id"
+          :template="tmpl"
+        />
+      </div>
+    </div>
+
+    <!-- Default templates -->
+    <div v-if="defaultTemplates.length" class="space-y-4">
+      <h2 class="text-sm font-medium text-muted uppercase tracking-wide">
+        Default Templates
+      </h2>
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <TemplateCard
+          v-for="tmpl in defaultTemplates"
+          :key="tmpl.id"
+          :template="tmpl"
+          @use-template="handleUseTemplate"
+        />
+      </div>
+    </div>
   </div>
 
   <!-- Create modal -->

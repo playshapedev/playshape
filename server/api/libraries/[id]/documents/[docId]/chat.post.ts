@@ -4,7 +4,10 @@ import type { UIMessage } from 'ai'
 import { eq } from 'drizzle-orm'
 import { documents, libraries } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { fetchUrl } from '~~/server/utils/webFetch'
+import { webSearchTool } from '~~/server/utils/tools/webSearch'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
@@ -81,6 +84,10 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       ask_question: askQuestionTool,
+      write_todos: createWriteTodosTool('document', docId),
+      get_todos: createGetTodosTool('document', docId),
+
+      web_search: webSearchTool,
 
       fetch_url: tool({
         description: 'Fetch content from a URL. Use this to research topics by retrieving information from web pages. Returns the page title and main text content.',

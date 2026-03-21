@@ -7,17 +7,19 @@
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
-    "build:electron": "nuxt build && electron-builder --mac",
-    "build:electron:win": "nuxt build && electron-builder --win",
-    "build:electron:linux": "nuxt build && electron-builder --linux",
-    "build:electron:all": "nuxt build && electron-builder --mac --win --linux",
+    "build:electron": "npm run build:nuxt-ui && nuxt build && electron-builder --mac",
+    "build:electron:win": "npm run build:nuxt-ui && nuxt build && electron-builder --win",
+    "build:electron:linux": "npm run build:nuxt-ui && nuxt build && electron-builder --linux",
+    "build:electron:all": "npm run build:nuxt-ui && nuxt build && electron-builder --mac --win --linux",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "generate:icons": "node scripts/generate-icons.mjs"
+    "generate:icons": "node scripts/generate-icons.mjs",
+    "build:nuxt-ui": "tsx scripts/build-nuxt-ui.ts",
+    "export-default": "tsx scripts/export-default.ts"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -44,13 +46,16 @@
     "@types/fluent-ffmpeg": "^2.1.28",
     "@types/jsdom": "^27.0.0",
     "@types/pdf-parse": "^1.1.5",
+    "@vitejs/plugin-vue": "^6.0.4",
     "drizzle-kit": "^0.31.9",
     "electron": "^34.0.0",
     "electron-builder": "^26.0.0",
     "nuxt": "^4.0.0",
     "sharp": "^0.34.5",
     "tailwindcss": "^4.0.0",
+    "tsx": "^4.21.0",
     "typescript": "^5.7.0",
+    "vite": "^7.3.1",
     "vite-plugin-electron": "^0.29.0",
     "vue-tsc": "^2.2.0"
   },

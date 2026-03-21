@@ -7,6 +7,8 @@ import { generateImage, getImageModelConfig, useActiveImageModel, DEFAULT_ASPECT
 import { generateAssetImageFilename, saveAssetFile, getAssetImageUrl, readAssetFile } from '~~/server/utils/assetStorage'
 import { readAttachmentFile } from '~~/server/utils/attachmentStorage'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
@@ -92,6 +94,8 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       ask_question: askQuestionTool,
+      write_todos: createWriteTodosTool('asset', id),
+      get_todos: createGetTodosTool('asset', id),
       get_asset: tool({
           description: 'Get the current asset details including name, generated images, and user-uploaded attachments. Use this to find image IDs for use with generate_image\'s referenceImageId parameter.',
           inputSchema: z.object({}),

@@ -749,6 +749,40 @@ function shouldShowToolDone(toolType: string, input: Record<string, unknown>, ou
                 {{ (part as any).input?.questions?.[0]?.question || 'Asked a question' }}
               </div>
 
+              <!-- Write todos: in progress -->
+              <div
+                v-else-if="part.type === 'tool-write_todos' && (part as any).state !== 'output-available'"
+                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+              >
+                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                Updating tasks...
+              </div>
+
+              <!-- Write todos: complete -->
+              <ChatTodoList
+                v-else-if="part.type === 'tool-write_todos' && (part as any).state === 'output-available'"
+                :output="(part as any).output"
+                class="not-first:mt-1"
+              />
+
+              <!-- Get todos: in progress -->
+              <div
+                v-else-if="part.type === 'tool-get_todos' && (part as any).state !== 'output-available'"
+                class="flex items-center gap-1.5 text-xs text-muted not-first:mt-1"
+              >
+                <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+                Reading tasks...
+              </div>
+
+              <!-- Get todos: complete (show message only, not the full list) -->
+              <div
+                v-else-if="part.type === 'tool-get_todos' && (part as any).state === 'output-available'"
+                class="flex items-center gap-1.5 text-xs text-dimmed not-first:mt-1"
+              >
+                <UIcon name="i-lucide-list-todo" class="size-3.5" />
+                {{ (part as any).output?.message || 'Retrieved tasks' }}
+              </div>
+
               <!-- Custom tool slot -->
               <slot v-else-if="part.type.startsWith('tool-')" :name="`tool-${part.type.slice(5)}`" :part="part" />
             </template>

@@ -250,9 +250,19 @@ export const imageProviders = sqliteTable('image_providers', {
 export const TEMPLATE_KINDS = ['activity', 'interface'] as const
 export type TemplateKind = (typeof TEMPLATE_KINDS)[number]
 
+/** Whether a template is user-created or a built-in default. */
+export const TEMPLATE_SOURCES = ['user', 'default'] as const
+export type TemplateSource = (typeof TEMPLATE_SOURCES)[number]
+
 export const templates = sqliteTable('templates', {
   id: text('id').primaryKey(),
   kind: text('kind').$type<TemplateKind>().notNull().default('activity'),
+  // Whether this template was created by the user or ships as a built-in default.
+  // Default templates are immutable — users duplicate them to customize.
+  source: text('source').$type<TemplateSource>().notNull().default('user'),
+  // Slug identifying which bundled default this template corresponds to (e.g. 'branching-scenario').
+  // Null for user-created templates.
+  sourceSlug: text('source_slug'),
   name: text('name').notNull(),
   description: text('description').default(''),
   // JSON array of field definitions — supports nested array fields for structured lists
@@ -477,6 +487,35 @@ export const chatAttachments = sqliteTable('chat_attachments', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
 })
 
+// ─── Chat Todos ──────────────────────────────────────────────────────────────
+// AI assistant task tracking for multi-step work. Each chat context (template,
+// activity, asset, document) can have its own todo list. The AI writes/updates
+// todos as it works, and reads them to resume work across sessions.
+
+/** Entity types that have chat conversations with todo tracking */
+export const CHAT_TODO_CONTEXT_TYPES = ['template', 'activity', 'asset', 'document'] as const
+export type ChatTodoContextType = (typeof CHAT_TODO_CONTEXT_TYPES)[number]
+
+/** Todo item status */
+export const CHAT_TODO_STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const
+export type ChatTodoStatus = (typeof CHAT_TODO_STATUSES)[number]
+
+/** Todo item priority */
+export const CHAT_TODO_PRIORITIES = ['high', 'medium', 'low'] as const
+export type ChatTodoPriority = (typeof CHAT_TODO_PRIORITIES)[number]
+
+export const chatTodos = sqliteTable('chat_todos', {
+  id: text('id').primaryKey(),
+  contextType: text('context_type').$type<ChatTodoContextType>().notNull(),
+  contextId: text('context_id').notNull(), // FK to templates/activities/assets/documents
+  content: text('content').notNull(),
+  status: text('status').$type<ChatTodoStatus>().notNull().default('pending'),
+  priority: text('priority').$type<ChatTodoPriority>().notNull().default('medium'),
+  position: integer('position').notNull().default(0), // sort order within the list
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
 // ─── Token Usage ─────────────────────────────────────────────────────────────
 // Tracks token consumption per chat conversation for cost monitoring and
 // analytics. Records are created after each LLM call with usage from the
@@ -506,4 +545,16 @@ export const settings = sqliteTable('settings', {
   key: text('key').primaryKey(),
   value: text('value', { mode: 'json' }),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Icon Cache ──────────────────────────────────────────────────────────────
+// Caches SVG icon data fetched from Iconify API for offline use and performance.
+// Icons are keyed by collection (e.g., 'lucide') and name (e.g., 'check').
+
+export const iconCache = sqliteTable('icon_cache', {
+  id: text('id').primaryKey(),
+  collection: text('collection').notNull(), // e.g., 'lucide', 'heroicons', 'simple-icons'
+  name: text('name').notNull(), // e.g., 'check', 'star', 'github'
+  svg: text('svg').notNull(), // raw SVG content
+  fetchedAt: integer('fetched_at', { mode: 'timestamp_ms' }).notNull(),
 })
