@@ -1,0 +1,472 @@
+{
+  "feature": "ai-providers-restructure",
+  "createdAt": "2026-03-21T10:00:00Z",
+  "requirements": [
+    {
+      "id": "nav-001",
+      "category": "functional",
+      "description": "AI Providers appears as top-level navigation item in sidebar",
+      "steps": [
+        "Open the application sidebar",
+        "Verify 'AI Providers' appears in top-level navigation list",
+        "Confirm icon is appropriate (e.g., brain/robot icon)",
+        "Click AI Providers to navigate to the section",
+        "Verify current route is /ai-providers"
+      ],
+      "passes": false
+    },
+    {
+      "id": "nav-002",
+      "category": "functional",
+      "description": "AI Providers has sub-navigation for LLM, Image, Speech, and Usage",
+      "steps": [
+        "Navigate to /ai-providers",
+        "Verify sidebar shows sub-pages: LLM, Image, Speech, Usage",
+        "Click each sub-page and verify correct route loads",
+        "Confirm sub-page icons are appropriate for each type",
+        "Verify active sub-page is highlighted in sidebar"
+      ],
+      "passes": false
+    },
+    {
+      "id": "nav-003",
+      "category": "functional",
+      "description": "Settings no longer contains AI Providers tab",
+      "steps": [
+        "Navigate to /settings",
+        "Verify AI Providers tab is not present",
+        "Confirm remaining tabs: Preferences, Branding, Data",
+        "Attempt to access /settings/ai URL directly",
+        "Verify redirect to /ai-providers occurs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-001",
+      "category": "technical",
+      "description": "Speech providers table created with proper schema",
+      "steps": [
+        "Review database schema file",
+        "Verify speech_providers table exists",
+        "Confirm columns: id, type, name, apiKey, baseUrl, createdAt, updatedAt",
+        "Verify type is constrained to 'elevenlabs'",
+        "Check foreign key relationships are properly defined"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-002",
+      "category": "technical",
+      "description": "Speech voices table created with ElevenLabs settings",
+      "steps": [
+        "Review database schema file",
+        "Verify speech_voices table exists",
+        "Confirm columns include voiceId, name, isActive, settings JSON",
+        "Verify settings JSON supports: stability, similarityBoost, style, useSpeakerBoost",
+        "Check providerId foreign key references speech_providers"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-003",
+      "category": "technical",
+      "description": "AI usage logs table created for granular tracking",
+      "steps": [
+        "Review database schema file",
+        "Verify ai_usage_logs table exists",
+        "Confirm columns: id, providerType, providerId, modelOrVoiceId, operationType",
+        "Verify columns include: tokensOrCharacters, cost, timestamp, metadata JSON",
+        "Check operationType enum includes: 'text', 'image', 'speech'"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-004",
+      "category": "technical",
+      "description": "Drizzle migrations generated for new tables",
+      "steps": [
+        "Run drizzle-kit generate command",
+        "Verify migration files created for speech_providers table",
+        "Verify migration files created for speech_voices table",
+        "Verify migration files created for ai_usage_logs table",
+        "Confirm journal.json updated with new migration entries"
+      ],
+      "passes": false
+    },
+    {
+      "id": "llm-001",
+      "category": "functional",
+      "description": "LLM Providers page displays configured providers",
+      "steps": [
+        "Navigate to /ai-providers/llm",
+        "Verify page loads with dashboard layout",
+        "Confirm list of configured LLM providers is displayed",
+        "Verify each provider shows name, type, and active model",
+        "Check that status indicators show provider health"
+      ],
+      "passes": false
+    },
+    {
+      "id": "llm-002",
+      "category": "functional",
+      "description": "LLM Providers page supports adding new providers",
+      "steps": [
+        "Navigate to /ai-providers/llm",
+        "Click 'Add Provider' button",
+        "Verify modal opens with provider type selection",
+        "Select a provider type (e.g., OpenAI)",
+        "Configure API key and save",
+        "Verify new provider appears in list"
+      ],
+      "passes": false
+    },
+    {
+      "id": "llm-003",
+      "category": "functional",
+      "description": "LLM Providers page supports model management",
+      "steps": [
+        "Navigate to /ai-providers/llm",
+        "Click on a configured provider",
+        "Verify model management interface opens",
+        "Click 'Add Model' and select from discovered models",
+        "Set a model as active",
+        "Verify active model indicator updates"
+      ],
+      "passes": false
+    },
+    {
+      "id": "img-001",
+      "category": "functional",
+      "description": "Image Providers page displays image-capable providers",
+      "steps": [
+        "Navigate to /ai-providers/image",
+        "Verify page loads with dashboard layout",
+        "Confirm providers with purpose='image' models are listed",
+        "Verify each shows name, type, and active image model",
+        "Check visual distinction from LLM providers"
+      ],
+      "passes": false
+    },
+    {
+      "id": "img-002",
+      "category": "functional",
+      "description": "Image Providers page supports image model configuration",
+      "steps": [
+        "Navigate to /ai-providers/image",
+        "Verify image-specific providers shown (Replicate, FAL, etc.)",
+        "Click 'Configure' on a provider",
+        "Add an image generation model",
+        "Set an image model as active",
+        "Verify image generation uses active model"
+      ],
+      "passes": false
+    },
+    {
+      "id": "spch-001",
+      "category": "functional",
+      "description": "Speech Providers page displays ElevenLabs configuration",
+      "steps": [
+        "Navigate to /ai-providers/speech",
+        "Verify page loads with dashboard layout",
+        "Confirm ElevenLabs provider section is visible",
+        "Verify API key input field for ElevenLabs",
+        "Check voice management section is present"
+      ],
+      "passes": false
+    },
+    {
+      "id": "spch-002",
+      "category": "functional",
+      "description": "Speech Providers page supports voice discovery and management",
+      "steps": [
+        "Navigate to /ai-providers/speech",
+        "Enter valid ElevenLabs API key",
+        "Click 'Discover Voices' button",
+        "Verify voice list populates from ElevenLabs API",
+        "Select voices to enable",
+        "Verify enabled voices appear in voice list"
+      ],
+      "passes": false
+    },
+    {
+      "id": "spch-003",
+      "category": "functional",
+      "description": "Speech voice settings can be configured",
+      "steps": [
+        "Navigate to /ai-providers/speech",
+        "Click on an enabled voice",
+        "Verify voice settings panel opens",
+        "Adjust stability slider (0.0 to 1.0)",
+        "Adjust similarity boost slider (0.0 to 1.0)",
+        "Save settings and verify persistence"
+      ],
+      "passes": false
+    },
+    {
+      "id": "spch-004",
+      "category": "functional",
+      "description": "Active speech voice can be selected",
+      "steps": [
+        "Navigate to /ai-providers/speech",
+        "Enable multiple voices",
+        "Click 'Set Active' on a voice",
+        "Verify active indicator moves to selected voice",
+        "Test speech generation uses active voice",
+        "Verify voice settings are applied in generation"
+      ],
+      "passes": false
+    },
+    {
+      "id": "use-001",
+      "category": "functional",
+      "description": "Usage page displays historical usage data",
+      "steps": [
+        "Navigate to /ai-providers/usage",
+        "Verify page loads with dashboard layout",
+        "Confirm usage statistics are displayed",
+        "Verify date range selector is present",
+        "Check data aggregates across all provider types"
+      ],
+      "passes": false
+    },
+    {
+      "id": "use-002",
+      "category": "functional",
+      "description": "Usage page shows charts for provider usage",
+      "steps": [
+        "Navigate to /ai-providers/usage",
+        "Verify chart component renders usage over time",
+        "Confirm chart shows LLM token usage",
+        "Verify chart shows Image generation count",
+        "Check chart shows Speech character usage",
+        "Verify tooltips show detailed breakdown on hover"
+      ],
+      "passes": false
+    },
+    {
+      "id": "use-003",
+      "category": "functional",
+      "description": "Usage page supports filtering by provider and date",
+      "steps": [
+        "Navigate to /ai-providers/usage",
+        "Select date range (Last 7 days, 30 days, Custom)",
+        "Verify chart updates for selected range",
+        "Filter by specific provider type (LLM only)",
+        "Verify data filters correctly",
+        "Clear filters and verify all data returns"
+      ],
+      "passes": false
+    },
+    {
+      "id": "use-004",
+      "category": "functional",
+      "description": "Usage tracking captures granular per-call data",
+      "steps": [
+        "Perform an LLM text generation",
+        "Verify entry created in ai_usage_logs table",
+        "Check tokens used and cost are recorded",
+        "Generate an image and verify log entry",
+        "Generate speech and verify character count logged",
+        "Verify all entries have accurate timestamps"
+      ],
+      "passes": false
+    },
+    {
+      "id": "api-001",
+      "category": "technical",
+      "description": "API routes exist for speech providers",
+      "steps": [
+        "Verify GET /api/ai-providers/speech endpoint exists",
+        "Check POST /api/ai-providers/speech for creating provider",
+        "Verify PATCH /api/ai-providers/speech/:id for updates",
+        "Confirm DELETE /api/ai-providers/speech/:id endpoint",
+        "Test GET /api/ai-providers/speech/voices for voice discovery"
+      ],
+      "passes": false
+    },
+    {
+      "id": "api-002",
+      "category": "technical",
+      "description": "API routes exist for usage data",
+      "steps": [
+        "Verify GET /api/ai-providers/usage endpoint exists",
+        "Check query params support date range filtering",
+        "Verify response includes aggregated data by provider type",
+        "Confirm endpoint supports time bucket parameter (daily/hourly)",
+        "Test data is properly aggregated from ai_usage_logs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "api-003",
+      "category": "technical",
+      "description": "API routes exist for speech voice management",
+      "steps": [
+        "Verify GET /api/ai-providers/speech/voices endpoint",
+        "Check POST /api/ai-providers/speech/voices for adding voice",
+        "Verify PATCH /api/ai-providers/speech/voices/:id for settings",
+        "Confirm POST /api/ai-providers/speech/voices/:id/activate endpoint",
+        "Test DELETE /api/ai-providers/speech/voices/:id for removal"
+      ],
+      "passes": false
+    },
+    {
+      "id": "comp-001",
+      "category": "ui",
+      "description": "SpeechProviderCard component displays voice information",
+      "steps": [
+        "Review SpeechProviderCard.vue component",
+        "Verify it displays provider name and type",
+        "Confirm voice count is shown",
+        "Check active voice is highlighted",
+        "Verify ElevenLabs branding/icon is present"
+      ],
+      "passes": false
+    },
+    {
+      "id": "comp-002",
+      "category": "ui",
+      "description": "SpeechVoiceSettings component allows configuration",
+      "steps": [
+        "Review SpeechVoiceSettings.vue component",
+        "Verify stability slider with 0.0-1.0 range",
+        "Confirm similarity boost slider present",
+        "Check style slider and use speaker boost toggle",
+        "Verify preview button plays voice sample"
+      ],
+      "passes": false
+    },
+    {
+      "id": "comp-003",
+      "category": "ui",
+      "description": "UsageChart component renders interactive charts",
+      "steps": [
+        "Review UsageChart.vue component",
+        "Verify chart library integration (e.g., Chart.js)",
+        "Confirm multi-series support for different provider types",
+        "Check hover tooltips show detailed data",
+        "Verify responsive design for different screen sizes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "comp-004",
+      "category": "ui",
+      "description": "ProviderSwitcher component updated for new structure",
+      "steps": [
+        "Review ProviderSwitcher.vue in sidebar",
+        "Verify it still shows active text and image models",
+        "Check if speech voice selector is added",
+        "Confirm quick-switch functionality works",
+        "Verify component reflects changes from new provider pages"
+      ],
+      "passes": false
+    },
+    {
+      "id": "mig-001",
+      "category": "technical",
+      "description": "Existing LLM and Image providers migrate automatically",
+      "steps": [
+        "Review migration strategy in code",
+        "Verify existing ai_providers data remains intact",
+        "Confirm ai_models relationships are preserved",
+        "Test application starts without data loss",
+        "Verify existing configurations work in new location"
+      ],
+      "passes": false
+    },
+    {
+      "id": "mig-002",
+      "category": "technical",
+      "description": "Settings AI page redirects to new location",
+      "steps": [
+        "Attempt to navigate to /settings/ai",
+        "Verify redirect to /ai-providers occurs",
+        "Check URL updates correctly in browser",
+        "Verify no 404 errors occur",
+        "Confirm settings tabs show correct remaining items"
+      ],
+      "passes": false
+    },
+    {
+      "id": "int-001",
+      "category": "integration",
+      "description": "ElevenLabs API integration works for voice discovery",
+      "steps": [
+        "Enter valid ElevenLabs API key",
+        "Click discover voices button",
+        "Verify API call to ElevenLabs /v1/voices endpoint",
+        "Confirm voice list is populated with available voices",
+        "Check error handling for invalid API key",
+        "Verify network error messages are user-friendly"
+      ],
+      "passes": false
+    },
+    {
+      "id": "int-002",
+      "category": "integration",
+      "description": "ElevenLabs API integration works for speech generation",
+      "steps": [
+        "Configure active voice with settings",
+        "Trigger speech generation in app",
+        "Verify API call to ElevenLabs /v1/text-to-speech",
+        "Confirm voice settings are passed in request",
+        "Check audio file is received and playable",
+        "Verify usage is logged to ai_usage_logs"
+      ],
+      "passes": false
+    },
+    {
+      "id": "sec-001",
+      "category": "security",
+      "description": "API keys are stored securely for speech providers",
+      "steps": [
+        "Review storage mechanism for ElevenLabs API key",
+        "Verify key is encrypted at rest (if secure storage available)",
+        "Check API key is never logged in plain text",
+        "Confirm key is not exposed in client-side code",
+        "Verify key validation occurs server-side only"
+      ],
+      "passes": false
+    },
+    {
+      "id": "sec-002",
+      "category": "security",
+      "description": "Usage data does not contain sensitive information",
+      "steps": [
+        "Review ai_usage_logs table schema",
+        "Verify no API keys or credentials are stored",
+        "Check metadata JSON doesn't include sensitive data",
+        "Confirm logs only contain operational metrics",
+        "Verify access to usage data is properly authorized"
+      ],
+      "passes": false
+    },
+    {
+      "id": "perf-001",
+      "category": "performance",
+      "description": "Usage data queries are optimized with indexes",
+      "steps": [
+        "Review ai_usage_logs table indexes",
+        "Verify index on timestamp column for time-range queries",
+        "Check index on providerType for filtering",
+        "Confirm composite index for common query patterns",
+        "Test query performance with large dataset"
+      ],
+      "passes": false
+    },
+    {
+      "id": "perf-002",
+      "category": "performance",
+      "description": "Usage charts load data efficiently",
+      "steps": [
+        "Navigate to usage page",
+        "Select 30-day date range",
+        "Verify chart data loads within 2 seconds",
+        "Check server aggregates data appropriately",
+        "Confirm client-side rendering is optimized"
+      ],
+      "passes": false
+    }
+  ]
+}
