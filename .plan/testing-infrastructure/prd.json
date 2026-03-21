@@ -26,7 +26,7 @@
         "Confirm setup files include Nuxt test utils setup",
         "Verify nuxt-shim is properly configured"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "cfg-003",

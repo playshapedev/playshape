@@ -13,3 +13,18 @@ Actions taken:
 - TypeScript config validated successfully
 
 No blockers. Ready for cfg-002.
+
+[2026-03-21] Completed cfg-002: @nuxt/test-utils is properly configured
+
+Actions taken:
+- Verified @nuxt/test-utils v4.0.0 is installed in devDependencies
+- Added '@nuxt/test-utils' to modules array in nuxt.config.ts
+- Confirmed vitest.config.ts uses defineVitestConfig from @nuxt/test-utils/config
+- Created tests/setup.ts with Nuxt test environment setup
+- Added setupFiles: ['./tests/setup.ts'] to vitest.config.ts
+- Ran nuxt prepare to regenerate types with new module
+- Ran typecheck - all passed
+- Ran vitest to verify configuration loads correctly
+
+Note: @nuxt/test-utils v4 doesn't require explicit nuxt-shim configuration - the module and setup file handle it automatically.
+No blockers. Ready for cfg-003.
