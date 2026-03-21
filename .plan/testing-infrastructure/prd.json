@@ -13,7 +13,7 @@
         "Confirm test environment is set to 'happy-dom' or 'jsdom'",
         "Verify configuration extends Nuxt's default config"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "cfg-002",

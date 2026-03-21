@@ -43,9 +43,13 @@ export default defineVitestConfig({
       },
     },
     deps: {
-      inline: [
-        /@nuxt\/test-utils/,
-      ],
+      optimizer: {
+        web: {
+          include: [
+            '@nuxt/test-utils',
+          ],
+        },
+      },
     },
   },
 })
