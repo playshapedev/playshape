@@ -39,7 +39,7 @@
         "Confirm 'test:coverage' script runs with coverage",
         "Check 'test:ci' script exists for CI with proper flags"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "dir-001",

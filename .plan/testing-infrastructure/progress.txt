@@ -28,3 +28,18 @@ Actions taken:
 
 Note: @nuxt/test-utils v4 doesn't require explicit nuxt-shim configuration - the module and setup file handle it automatically.
 No blockers. Ready for cfg-003.
+
+[2026-03-21] Completed cfg-003: Test scripts added to package.json
+
+Actions taken:
+- Added 'test' script: vitest (runs vitest in watch mode)
+- Added 'test:unit' script: vitest --run (runs unit tests without watch)
+- Added 'test:ui' script: vitest --ui (opens Vitest UI for visual debugging)
+- Added 'test:coverage' script: vitest --coverage (runs with coverage)
+- Added 'test:ci' script: vitest --coverage --run --reporter=verbose (for CI)
+- Installed @vitest/ui@4.1.0 as dev dependency for the UI feature
+- Verified all scripts execute successfully (exit 1 expected as no tests exist yet)
+- Ran pnpm install to update dependencies
+- Ran typecheck - all passed
+
+All test scripts are working correctly. Ready for dir-001.
