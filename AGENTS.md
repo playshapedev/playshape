@@ -205,6 +205,48 @@ Updates are distributed through the App Store and Play Store. Migrations run on 
 - Migration errors: Fatal — show error dialog and prevent app from loading with corrupt state.
 - Validation errors: Log the Zod error details, show user-friendly message in the UI.
 
+### Testing Conventions
+
+We follow a **4-tier testing strategy** to balance coverage with maintenance burden:
+
+1. **Tier 1: Static Analysis** — TypeScript strict mode + ESLint (already configured)
+2. **Tier 2: Logic Tests** — Pure functions in `lib/` tested with Vitest (node environment)
+3. **Tier 3: Integration Tests** — API routes tested with `@nuxt/test-utils` (nuxt environment)
+4. **Tier 4: E2E Tests** — Full workflows (reserved for critical paths when they stabilize)
+
+#### Test Organization
+
+- **Tier 2 (Logic)**: Co-located with source files in `lib/`
+  - Example: `lib/navigation/resolver.ts` → `lib/navigation/resolver.test.ts`
+  - Run with: `npm run test:unit`
+  - Environment: `vitest.unit.config.ts` with `environment: 'node'`
+  - Must have zero Nuxt/Vue imports, zero DOM dependencies
+
+- **Tier 3 (Integration)**: Separate directory at `tests/api/`
+  - Example: `tests/api/projects.test.ts`
+  - Run with: `npm run test:integration`
+  - Environment: `vitest.integration.config.ts` with `environment: 'nuxt'`
+  - Use `registerEndpoint()` to mock API calls, `setup()` for test database
+
+- **Shared Fixtures**: `tests/fixtures/` for reusable test data
+  - Example: `tests/fixtures/projects.ts` with sample project data
+
+#### What Not to Test
+
+- **Components that just render props** — Trust the framework
+- **Simple fetch wrappers** — TypeScript gives us confidence
+- **Framework internals** — Nuxt/Vue have their own test suites
+- **Trivial computed properties** — Vue's reactivity is well-tested
+
+#### Testing Patterns
+
+- **Pure functions first**: Extract business logic to `lib/` for easy testing
+- **Test observable output, not implementation**: Check what functions return, not how they work internally
+- **Mock at boundaries**: Mock API calls, not the composables that make them
+- **Database isolation**: Each test runs with clean data via `tests/setup.ts`
+
+See `.agents/skills/nuxt-testing/SKILL.md` for detailed testing guidance.
+
 ---
 
 ## Activity Generation Pipeline

@@ -85,3 +85,26 @@ None yet.
 - All 19 integration tests pass (7 project tests + 4 health tests + 8 database tests)
 - TypeScript type checking passes
 - Tests run successfully with `npm run test:integration`
+
+### pattern-001: Establish test organization conventions (✅ Complete)
+- Verified lib/ directory exists at root with navigation resolver, colorScale, and chatMode logic
+- Confirmed tests/api/ directory exists with 3 integration test files (projects, health, database)
+- Confirmed tests/fixtures/ directory exists with project fixture data
+- Documented test organization patterns in AGENTS.md:
+  - Added comprehensive "Testing Conventions" section
+  - Explained 4-tier testing strategy (Static Analysis, Logic, Integration, E2E)
+  - Documented Tier 2 co-location pattern (tests next to source in lib/)
+  - Documented Tier 3 separation (tests in tests/api/)
+  - Documented what NOT to test (components that render props, simple fetch wrappers, framework internals)
+  - Added testing patterns section with best practices
+  - Referenced nuxt-testing skill for detailed guidance
+- All 38 unit tests and 19 integration tests pass
+- TypeScript type checking passes
+
+## Blockers
+
+None.
+
+## Next Steps
+
+Next requirement to work on: pattern-002 (Create example composable test for useProjects)

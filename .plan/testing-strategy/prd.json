@@ -97,7 +97,7 @@
         "Document pattern: Tier 2 co-located, Tier 3 in tests/api/",
         "Update AGENTS.md with testing conventions section"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "pattern-002",
