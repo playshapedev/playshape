@@ -28,7 +28,7 @@
         "Verify tests run with 'vitest --project unit'",
         "Ensure no Nuxt imports or DOM dependencies in logic tests"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "logic-002",

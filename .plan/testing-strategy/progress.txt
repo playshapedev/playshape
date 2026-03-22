@@ -24,6 +24,14 @@ This PRD establishes a proper testing foundation following the 4-tier strategy:
 - Updated `package.json` scripts: `test:unit`, `test:integration`, `test:watch`
 - Verified both configurations work with test runs
 
+### logic-001: Extract and test navigation resolver logic (✅ Complete)
+- Created `lib/navigation/resolver.ts` with pure `resolveNavItem()` and `resolveTab()` functions
+- Created `lib/navigation/resolver.test.ts` with 18 comprehensive test cases
+- Updated `app/utils/navigation.ts` to import from lib/ and maintain backward compatibility
+- All tests pass with `npm run test:unit`
+- TypeScript type checking passes
+- No Nuxt imports or DOM dependencies in the logic code
+
 ## Blockers
 
 None yet.
