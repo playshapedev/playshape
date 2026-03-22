@@ -39,3 +39,5 @@ Thumbs.db
 # OpenCode tooling
 .opencode/node_modules/
 .opencode/bun.lock
+.agents
+

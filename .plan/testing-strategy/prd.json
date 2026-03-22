@@ -132,8 +132,8 @@
       "category": "testing",
       "description": "Validate tests run successfully in CI configuration",
       "steps": [
-        "Ensure 'npm run test' runs all test tiers",
-        "Verify 'npm run test:unit' runs only Tier 2 tests",
+        "Ensure 'pnpm run test' runs all test tiers",
+        "Verify 'pnpm run test:unit' runs only Tier 2 tests",
         "Confirm tests pass locally without external services",
         "Check that tests don't require real LLM or database connections",
         "Document any environment setup required for tests"

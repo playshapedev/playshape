@@ -2,9 +2,9 @@
 // Tier 2: unit tests (node environment for pure logic)
 // Tier 3: integration tests (nuxt environment for API routes)
 //
-// To run all tests: npm run test
-// To run only unit tests: npm run test:unit (or vitest --project unit)
-// To run only integration tests: npm run test:integration (or vitest --project integration)
+// To run all tests: pnpm run test
+// To run only unit tests: pnpm run test:unit (or vitest --project unit)
+// To run only integration tests: pnpm run test:integration (or vitest --project integration)
 
 import { defineConfig } from 'vitest/config'
 
