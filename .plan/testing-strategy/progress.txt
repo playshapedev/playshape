@@ -70,3 +70,18 @@ None yet.
 1. Identify more pure logic to extract and test
 2. Expand API integration tests to other critical endpoints (courses, activities)
 3. Consider E2E tests for critical workflows (create project → create course → create activity)
+
+### integration-003: Test database connectivity in integration layer (✅ Complete)
+- Updated `tests/setup.ts` with test database environment configuration
+- Set up isolated test database directory at `data/test/`
+- Configured test environment variables: `NODE_ENV=test`, `PLAYSHAPE_TEST_DB_PATH`, `PLAYSHAPE_MIGRATIONS_PATH`
+- Created `tests/fixtures/projects.ts` with comprehensive sample data for projects, templates, courses, sections, and activities
+- Created `tests/api/database.test.ts` with 8 comprehensive integration tests covering:
+  - Test database directory and environment setup
+  - useDb() composable accessibility via health endpoint
+  - Database connectivity verification
+  - CRUD operations (create, read, update, delete) through API
+  - Test isolation verification
+- All 19 integration tests pass (7 project tests + 4 health tests + 8 database tests)
+- TypeScript type checking passes
+- Tests run successfully with `npm run test:integration`

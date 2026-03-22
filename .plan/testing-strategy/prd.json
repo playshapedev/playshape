@@ -83,7 +83,7 @@
         "Verify database tests use isolated transactions",
         "Test that useDb() composable works in test context"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "pattern-001",
