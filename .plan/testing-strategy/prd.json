@@ -138,7 +138,7 @@
         "Check that tests don't require real LLM or database connections",
         "Document any environment setup required for tests"
       ],
-      "passes": false
+      "passes": true
     }
   ]
 }
