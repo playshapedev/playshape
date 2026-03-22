@@ -111,7 +111,7 @@
         "Show pattern for testing other composables",
         "Keep test focused on composable behavior, not component rendering"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "docs-001",

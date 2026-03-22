@@ -17,6 +17,7 @@ export default defineVitestConfig({
     include: [
       'tests/api/**/*.test.ts',
       'tests/api/**/*.spec.ts',
+      'app/composables/**/*.spec.ts',
     ],
     exclude: [
       'node_modules/**',

@@ -105,6 +105,21 @@ None yet.
 
 None.
 
+### pattern-002: Create example composable test for useProjects (✅ Complete)
+- Created `app/composables/useProjects.spec.ts` with comprehensive composable test examples
+- Tests cover all useProjects composable functions:
+  - `useProjects()` - initialization and fetching projects list
+  - `useProject(id)` - fetching single project by ID with dynamic ID support
+  - `createProject()` - POST to /api/projects with validation
+  - `updateProject()` - PATCH to /api/projects/:id
+  - `deleteProject()` - DELETE to /api/projects/:id
+- Uses `registerEndpoint()` from `@nuxt/test-utils/runtime` to mock API calls
+- Demonstrates error handling patterns with proper type assertions
+- Updated `vitest.integration.config.ts` to include `app/composables/**/*.spec.ts`
+- All 29 integration tests pass (19 existing + 10 new composable tests)
+- No lint errors
+- TypeScript type checking passes
+
 ## Next Steps
 
-Next requirement to work on: pattern-002 (Create example composable test for useProjects)
+Next requirement to work on: docs-001 (Document testing strategy and patterns)
