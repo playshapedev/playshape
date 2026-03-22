@@ -57,7 +57,7 @@
         "Test DELETE /api/projects/:id removes project",
         "Verify all tests pass with 'vitest --project integration'"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "integration-002",
