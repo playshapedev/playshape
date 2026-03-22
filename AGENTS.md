@@ -36,7 +36,7 @@ Playshape is a cross-platform app that empowers learning experience designers (L
 | Images | **Nuxt Image** | Optimized image handling, lazy loading, responsive sizing for content previews and activity assets |
 | Security | **Nuxt Security** | CSP headers, rate limiting, XSS protection. Configures security defaults for the Electron renderer |
 | Linting | **Nuxt ESLint** | Project-aware ESLint config with Vue/Nuxt rules. Flat config format |
-| Testing | **Nuxt Test Utils** | Component and integration testing with Vitest. Use for composable and page-level tests |
+| Testing | **Nuxt Test Utils** | Component and integration testing with Vitest. See `nuxt-testing` skill for detailed testing strategy |
 | Integration | **Local Nuxt module** (`modules/electron.ts`) + **vite-plugin-electron** | Custom module bridges Nuxt and Electron. Uses `vite-plugin-electron` for building main/preload entries and managing the Electron process lifecycle |
 
 ### Data Layer

@@ -1,0 +1,35 @@
+# Testing Strategy Progress
+
+## Implementation Notes
+
+This PRD establishes a proper testing foundation following the 4-tier strategy:
+- Tier 1: Static analysis (TypeScript + ESLint) - already configured
+- Tier 2: Logic tests - pure functions in lib/
+- Tier 3: Integration tests - API routes in tests/api/
+- Tier 4: E2E tests - to be added later when critical paths stabilize
+
+## Decisions Made
+
+- Focus on patterns over quantity: Establish 3-5 high-quality examples rather than 100% coverage
+- Co-location for Tier 2: Tests next to source files in lib/
+- Separate directory for Tier 3: Integration tests in tests/api/
+- Use @nuxt/test-utils properly with Vitest projects
+- Don't test: Components that just render props, simple fetch wrappers, framework internals
+
+## Completed Requirements
+
+### setup-001: Configure Vitest with proper environments (✅ Complete)
+- Created `vitest.unit.config.ts` with 'node' environment for Tier 2 tests
+- Created `vitest.integration.config.ts` with 'nuxt' environment for Tier 3 tests
+- Updated `package.json` scripts: `test:unit`, `test:integration`, `test:watch`
+- Verified both configurations work with test runs
+
+## Blockers
+
+None yet.
+
+## Next Steps After This PRD
+
+1. Identify more pure logic to extract and test
+2. Expand API integration tests to other critical endpoints (courses, activities)
+3. Consider E2E tests for critical workflows (create project → create course → create activity)
