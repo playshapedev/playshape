@@ -125,7 +125,7 @@
         "Include commands to run different test tiers",
         "Reference nuxt-testing skill for detailed guidance"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "validation-001",

@@ -122,4 +122,16 @@ None.
 
 ## Next Steps
 
-Next requirement to work on: docs-001 (Document testing strategy and patterns)
+Next requirement to work on: validation-001 (Validate tests run successfully in CI configuration)
+
+### docs-001: Document testing strategy and patterns (✅ Complete)
+- Created comprehensive TESTING.md at project root with 200+ lines
+- Explained 4-tier testing strategy with clear descriptions of each tier
+- Documented decision guide for when to write Tier 2 vs Tier 3 tests
+- Provided real examples from our codebase (navigation resolver, projects API, useProjects composable)
+- Included all test commands (test:unit, test:integration, test, test:watch, test:coverage)
+- Added best practices section with Do's and Don'ts
+- Referenced nuxt-testing skill for detailed guidance
+- All 38 unit tests and 29 integration tests pass
+- TypeScript type checking passes
+- No lint errors in the new file
