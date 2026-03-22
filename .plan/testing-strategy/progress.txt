@@ -32,6 +32,17 @@ This PRD establishes a proper testing foundation following the 4-tier strategy:
 - TypeScript type checking passes
 - No Nuxt imports or DOM dependencies in the logic code
 
+### logic-002: Test colorScale and chatMode utilities (✅ Complete)
+- Reviewed app/utils/ and found no extractable logic in courseApi/ (only types and template strings)
+- Identified `colorScale.ts` and `chatMode.ts` as utilities with clear business logic
+- Extracted color manipulation logic to `lib/colorScale.ts` with `hexToHSL()`, `hslToHex()`, and `generateColorScale()`
+- Created `lib/colorScale.test.ts` with 15 comprehensive test cases for color operations
+- Extracted chat mode logic to `lib/chatMode.ts` with `getInitialChatMode()` function
+- Created `lib/chatMode.test.ts` with 3 test cases for mode determination
+- Updated original app/utils files to re-export from lib/ for backward compatibility
+- All 38 unit tests pass
+- TypeScript type checking passes
+
 ## Blockers
 
 None yet.
