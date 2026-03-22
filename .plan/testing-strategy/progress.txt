@@ -55,6 +55,16 @@ This PRD establishes a proper testing foundation following the 4-tier strategy:
 
 None yet.
 
+## Completed Requirements
+
+### integration-002: Test health check endpoint (✅ Complete)
+- Created `tests/api/health.test.ts` with 4 integration tests for health endpoint
+- Tests verify response includes status ('ok' or 'degraded') and platform info ('electron' or 'web')
+- Tests check timestamp and database status are present in response
+- Tests confirm endpoint works without external dependencies (no LLM or external services needed)
+- All 4 tests pass with `npm run test:integration`
+- Total: 11 integration tests passing across 2 test files
+
 ## Next Steps After This PRD
 
 1. Identify more pure logic to extract and test

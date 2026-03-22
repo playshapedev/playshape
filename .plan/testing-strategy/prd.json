@@ -70,7 +70,7 @@
         "Check response has timestamp and database status",
         "Test passes without external dependencies"
       ],
-      "passes": false
+      "passes": true
     },
     {
       "id": "integration-003",
