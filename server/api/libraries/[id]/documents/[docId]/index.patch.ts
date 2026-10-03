@@ -17,8 +17,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Library ID and Document ID are required' })
   }
 
-  const body = await readBody(event)
-  const parsed = updateDocumentSchema.parse(body)
+  const parsed = await readValidatedBody(event, updateDocumentSchema.parse)
 
   const db = useDb()
 

@@ -16,8 +16,7 @@ const settingsSchema = z.object({
  * Updates app settings. Only provided fields are updated.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = settingsSchema.parse(body)
+  const parsed = await readValidatedBody(event, settingsSchema.parse)
 
   if (parsed.contentCleanupEnabled !== undefined) {
     setContentCleanupEnabled(parsed.contentCleanupEnabled)

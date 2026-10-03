@@ -4,6 +4,7 @@
  */
 
 import { spawn } from 'node:child_process'
+import { statSync } from 'node:fs'
 import { getFfmpegPath, getFfprobePath } from './ffmpegPath'
 
 export interface VideoMetadata {
@@ -151,12 +152,11 @@ export function extractThumbnail(
 export function getVideoMetadata(videoPath: string): Promise<VideoMetadata> {
   return new Promise((resolve, reject) => {
     const ffprobePath = getFfprobePath()
-    const fs = require('node:fs')
 
     // Get file size
     let fileSize = 0
     try {
-      const stats = fs.statSync(videoPath)
+      const stats = statSync(videoPath)
       fileSize = stats.size
     }
     catch {

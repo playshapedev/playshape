@@ -38,7 +38,7 @@ describe('hexToHSL', () => {
   })
 
   it('converts gray to HSL (zero saturation)', () => {
-    const [h, s, l] = hexToHSL('#808080')
+    const [, s, l] = hexToHSL('#808080')
     expect(s).toBe(0)
     expect(l).toBeCloseTo(0.5, 2)
   })
@@ -99,8 +99,8 @@ describe('generateColorScale', () => {
 
   it('produces lighter shades for lower numbers', () => {
     const scale = generateColorScale('#7458f5')
-    const [,, l50] = hexToHSL(scale['50'])
-    const [,, l900] = hexToHSL(scale['900'])
+    const [,, l50] = hexToHSL(scale['50']!)
+    const [,, l900] = hexToHSL(scale['900']!)
     
     expect(l50).toBeGreaterThan(l900)
   })
@@ -112,7 +112,7 @@ describe('generateColorScale', () => {
     // Test shades from 100-900 (skip 50 and 950 which can have hue shifts in very light/dark)
     const shadesToTest = ['100', '200', '300', '400', '500', '600', '700', '800', '900']
     for (const shadeKey of shadesToTest) {
-      const shade = scale[shadeKey]
+      const shade = scale[shadeKey]!
       const [h, s] = hexToHSL(shade)
       // Skip if saturation is very low (grayscale-appearing shades)
       if (s < 0.05) continue
@@ -123,7 +123,7 @@ describe('generateColorScale', () => {
 
   it('handles red input', () => {
     const scale = generateColorScale('#ff0000')
-    expect(scale['500'].toLowerCase()).toBe('#ff0000')
+    expect(scale['500']!.toLowerCase()).toBe('#ff0000')
   })
 
   it('handles grayscale input', () => {

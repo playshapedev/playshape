@@ -23,8 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Template ID is required' })
   }
 
-  const body = await readBody(event)
-  const parsed = updateTemplateSchema.parse(body)
+  const parsed = await readValidatedBody(event, updateTemplateSchema.parse)
 
   const db = useDb()
 

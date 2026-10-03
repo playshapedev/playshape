@@ -13,8 +13,6 @@
  * - Course-level completion rollup
  */
 
-import { compressToBase64, decompressFromBase64 } from 'lz-string'
-
 export type ScormVersion = 'scorm-1.2' | 'scorm-2004'
 
 /**

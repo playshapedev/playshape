@@ -13,7 +13,6 @@ import {
   generateImage,
   useActiveImageModel,
   DEFAULT_ASPECT_RATIO,
-  ASPECT_RATIOS,
 } from '~~/server/utils/imageGeneration'
 import {
   generateAssetImageFilename,

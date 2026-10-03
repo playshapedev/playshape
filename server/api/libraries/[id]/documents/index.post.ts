@@ -46,8 +46,7 @@ export default defineEventHandler(async (event) => {
 
   // Handle JSON body (plain text paste or AI-generated document)
   if (contentType.includes('application/json')) {
-    const body = await readBody(event)
-    const parsed = textDocumentSchema.parse(body)
+    const parsed = await readValidatedBody(event, textDocumentSchema.parse)
 
     // For generated documents, create an empty shell (no cleanup, no chunking)
     if (parsed.sourceType === 'generated') {

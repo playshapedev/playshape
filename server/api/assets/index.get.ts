@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm'
+import { desc } from 'drizzle-orm'
 import { assets, assetImages, assetVideos } from '~~/server/database/schema'
 
 /**
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
 
   // Build query with filters
-  let assetQuery = db.select().from(assets).orderBy(desc(assets.updatedAt))
+  const assetQuery = db.select().from(assets).orderBy(desc(assets.updatedAt))
 
   // Get all assets first, then filter in JS (simpler than building dynamic where clauses)
   const allAssets = assetQuery.all()

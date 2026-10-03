@@ -12,8 +12,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Project ID is required' })
   }
 
-  const body = await readBody(event)
-  const parsed = linkLibrarySchema.parse(body)
+  const parsed = await readValidatedBody(event, linkLibrarySchema.parse)
 
   const db = useDb()
 

@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
 import { drizzle } from 'drizzle-orm/better-sqlite3'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { existsSync, mkdirSync } from 'node:fs'
 import * as schema from '../database/schema'
 
@@ -16,12 +16,14 @@ let _db: ReturnType<typeof drizzle<typeof schema>> | null = null
 export function useDb() {
   if (_db) return _db
 
-  const dbDir = getDbDir()
+  // PLAYSHAPE_DB_PATH points at an explicit file (used by tests to get an
+  // isolated database instead of the dev one).
+  const dbPath = process.env.PLAYSHAPE_DB_PATH || join(getDbDir(), 'playshape.db')
+  const dbDir = dirname(dbPath)
   if (!existsSync(dbDir)) {
     mkdirSync(dbDir, { recursive: true })
   }
 
-  const dbPath = join(dbDir, 'playshape.db')
   const sqlite = new Database(dbPath)
 
   // Enable WAL mode for better concurrent read performance

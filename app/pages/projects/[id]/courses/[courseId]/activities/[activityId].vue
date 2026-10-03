@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { UIMessage } from '~/types/chat'
 import type { ChatMode } from '~/utils/chatMode'
 import { getInitialChatMode } from '~/utils/chatMode'
 
@@ -143,10 +144,10 @@ async function handleUpgrade() {
 const templateChatRef = ref<{ reportPreviewError: (error: string) => void } | null>(null)
 
 // Capture initial messages once so the prop reference stays stable across refresh()
-const initialChatMessages = ref<any[]>([])
+const initialChatMessages = ref<UIMessage[]>([])
 watch(() => activity.value?.messages, (messages) => {
   if (messages && !initialChatMessages.value.length) {
-    initialChatMessages.value = messages as any[]
+    initialChatMessages.value = messages as unknown as UIMessage[]
   }
 }, { immediate: true })
 

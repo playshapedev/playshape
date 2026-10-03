@@ -1,6 +1,6 @@
 import { generateText, convertToModelMessages } from 'ai'
 import type { UIMessage, ModelMessage } from 'ai'
-import { countTokens, countMessagesTokens, countSystemTokens } from './tokens'
+import { countMessagesTokens, countSystemTokens } from './tokens'
 
 /**
  * Configuration for context compaction behavior.

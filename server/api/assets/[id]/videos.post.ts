@@ -14,9 +14,8 @@ import {
   getAssetsDir,
   generateAssetVideoFilename,
   generateVideoThumbnailFilename,
-  saveAssetFile,
 } from '~~/server/utils/assetStorage'
-import { compressVideo, extractThumbnail, getVideoMetadata, isFFmpegAvailable } from '~~/server/utils/videoProcessing'
+import { compressVideo, extractThumbnail, isFFmpegAvailable } from '~~/server/utils/videoProcessing'
 
 export default defineEventHandler(async (event) => {
   const assetId = getRouterParam(event, 'id')

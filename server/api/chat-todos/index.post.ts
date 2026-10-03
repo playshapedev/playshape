@@ -27,8 +27,7 @@ export type ChatTodoInput = z.infer<typeof todoItemSchema>
  * This is a "write entire list" operation — not incremental updates.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = bodySchema.parse(body)
+  const parsed = await readValidatedBody(event, bodySchema.parse)
 
   const db = useDb()
   const now = new Date()
