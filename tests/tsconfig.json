@@ -1,0 +1,15 @@
+{
+  // Typechecks test code and the pure logic under lib/ with the server's
+  // settings (Nitro auto-imports, ~~ alias). Used by `pnpm typecheck`.
+  "extends": "../.nuxt/tsconfig.server.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": [
+    "../.nuxt/types/nitro-nuxt.d.ts",
+    "../.nuxt/types/nitro.d.ts",
+    "./**/*",
+    "../lib/**/*",
+    "../server/**/*"
+  ]
+}

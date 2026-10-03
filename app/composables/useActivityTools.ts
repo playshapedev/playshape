@@ -99,7 +99,7 @@ export function useActivityTools() {
         parts.push(`  <link rel="stylesheet" href="${url}">`)
       }
       for (const url of tool.scripts) {
-        parts.push(`  <script src="${url}"><\/script>`)
+        parts.push(`  <script src="${url}"></script>`)
       }
     }
     return parts.join('\n')

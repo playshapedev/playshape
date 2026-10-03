@@ -1,12 +1,6 @@
 import type { TemplateField } from '../database/schema'
 
 /**
- * Fields that are display-only and don't affect data structure.
- * Changes to these don't require a version bump.
- */
-const DISPLAY_ONLY_KEYS: (keyof TemplateField)[] = ['label', 'placeholder']
-
-/**
  * Checks if two inputSchema arrays represent structurally different data shapes.
  * Ignores display-only fields like label and placeholder.
  *

@@ -235,7 +235,7 @@ async function onSetDefault(brand: Brand) {
                   v-model="formState.primaryColor"
                   type="color"
                   class="size-9 rounded-lg border border-default cursor-pointer shrink-0"
-                />
+                >
                 <UInput
                   v-model="formState.primaryColor"
                   placeholder="#7458f5"
@@ -250,7 +250,7 @@ async function onSetDefault(brand: Brand) {
                   v-model="formState.neutralColor"
                   type="color"
                   class="size-9 rounded-lg border border-default cursor-pointer shrink-0"
-                />
+                >
                 <UInput
                   v-model="formState.neutralColor"
                   placeholder="#64748b"
@@ -265,7 +265,7 @@ async function onSetDefault(brand: Brand) {
                   v-model="formState.accentColor"
                   type="color"
                   class="size-9 rounded-lg border border-default cursor-pointer shrink-0"
-                />
+                >
                 <UInput
                   v-model="formState.accentColor"
                   placeholder="#3b82f6"

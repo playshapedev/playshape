@@ -36,7 +36,7 @@ Playshape is a cross-platform app that empowers learning experience designers (L
 | Images | **Nuxt Image** | Optimized image handling, lazy loading, responsive sizing for content previews and activity assets |
 | Security | **Nuxt Security** | CSP headers, rate limiting, XSS protection. Configures security defaults for the Electron renderer |
 | Linting | **Nuxt ESLint** | Project-aware ESLint config with Vue/Nuxt rules. Flat config format |
-| Testing | **Nuxt Test Utils** | Component and integration testing with Vitest. See `nuxt-testing` skill for detailed testing strategy |
+| Testing | **Vitest** | Unit and API integration tests, run in CI. See `TESTING.md` |
 | Integration | **Local Nuxt module** (`modules/electron.ts`) + **vite-plugin-electron** | Custom module bridges Nuxt and Electron. Uses `vite-plugin-electron` for building main/preload entries and managing the Electron process lifecycle |
 
 ### Data Layer
@@ -207,29 +207,27 @@ Updates are distributed through the App Store and Play Store. Migrations run on 
 
 ### Testing Conventions
 
-We follow a **4-tier testing strategy** to balance coverage with maintenance burden:
+We follow a **4-tier testing strategy** (details in `TESTING.md`). CI (`.github/workflows/ci.yml`) runs lint, typecheck and all tests on every push to master and every PR.
 
-1. **Tier 1: Static Analysis** — TypeScript strict mode + ESLint (already configured)
-2. **Tier 2: Logic Tests** — Pure functions in `lib/` tested with Vitest (node environment)
-3. **Tier 3: Integration Tests** — API routes tested with `@nuxt/test-utils` (nuxt environment)
+1. **Tier 1: Static Analysis** — `pnpm lint` + `pnpm typecheck` (app, server, and test code)
+2. **Tier 2: Logic Tests** — Pure functions tested with Vitest in a plain Node environment
+3. **Tier 3: Integration Tests** — API route handlers run in-process against a throwaway SQLite database
 4. **Tier 4: E2E Tests** — Full workflows (reserved for critical paths when they stabilize)
 
 #### Test Organization
 
-- **Tier 2 (Logic)**: Co-located with source files in `lib/`
-  - Example: `lib/navigation/resolver.ts` → `lib/navigation/resolver.test.ts`
-  - Run with: `npm run test:unit`
-  - Environment: `vitest.unit.config.ts` with `environment: 'node'`
-  - Must have zero Nuxt/Vue imports, zero DOM dependencies
+- **Tier 2 (Logic)**: `*.test.ts` co-located with the source in `lib/`, `server/**`, `app/utils/`
+  - Example: `server/utils/scorm/buildManifest.ts` → `server/utils/scorm/buildManifest.test.ts`
+  - Run with: `pnpm test:unit` (`vitest.unit.config.ts`)
+  - Import what you test explicitly; no Nuxt runtime, DOM or database
 
-- **Tier 3 (Integration)**: Separate directory at `tests/api/`
-  - Example: `tests/api/projects.test.ts`
-  - Run with: `npm run test:integration`
-  - Environment: `vitest.integration.config.ts` with `environment: 'nuxt'`
-  - Use `registerEndpoint()` to mock API calls, `setup()` for test database
+- **Tier 3 (Integration)**: `tests/integration/api/*.test.ts`
+  - Call routes with `api()` from `tests/integration/utils/api.ts`, e.g. `await api('/api/projects', { method: 'POST', body })`
+  - Run with: `pnpm test:integration` (`vitest.integration.config.ts`)
+  - Each test file gets its own temp database with all migrations applied (`tests/integration/setup.ts`), so tests never touch `data/playshape.db`
+  - Assert on `status` and `data`; never write assertions that only run `if` the call succeeded
 
-- **Shared Fixtures**: `tests/fixtures/` for reusable test data
-  - Example: `tests/fixtures/projects.ts` with sample project data
+- **Shared Fixtures**: `tests/fixtures/` for reusable test data (insert with `useDb()` for things the API can't create, like templates)
 
 #### What Not to Test
 
@@ -240,10 +238,10 @@ We follow a **4-tier testing strategy** to balance coverage with maintenance bur
 
 #### Testing Patterns
 
-- **Pure functions first**: Extract business logic to `lib/` for easy testing
+- **Pure functions first**: Extract business logic to `lib/` or `server/utils/` for easy testing
 - **Test observable output, not implementation**: Check what functions return, not how they work internally
-- **Mock at boundaries**: Mock API calls, not the composables that make them
-- **Database isolation**: Each test runs with clean data via `tests/setup.ts`
+- **Validate request bodies with `readValidatedBody(event, schema.parse)`** so bad input returns 400, not 500
+- **Never call real LLM providers in tests**
 
 See `.agents/skills/nuxt-testing/SKILL.md` for detailed testing guidance.
 

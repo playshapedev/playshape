@@ -20,8 +20,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Project ID, Course ID, and Activity ID are required' })
   }
 
-  const body = await readBody(event)
-  const skillIds = [...new Set(setActivitySkillsSchema.parse(body).skillIds)]
+  const { skillIds: requested } = await readValidatedBody(event, setActivitySkillsSchema.parse)
+  const skillIds = [...new Set(requested)]
 
   const db = useDb()
 

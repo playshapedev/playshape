@@ -4,7 +4,7 @@
  */
 
 import type { InferInsertModel } from 'drizzle-orm'
-import { projects, courses, courseSections, activities, templates } from '../../server/database/schema'
+import type { projects, courses, courseSections, activities, templates } from '../../server/database/schema'
 
 // Type definitions for fixtures
 export type ProjectInsert = InferInsertModel<typeof projects>

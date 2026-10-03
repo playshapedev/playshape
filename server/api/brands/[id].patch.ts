@@ -20,8 +20,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Brand ID is required' })
   }
 
-  const body = await readBody(event)
-  const parsed = updateBrandSchema.parse(body)
+  const parsed = await readValidatedBody(event, updateBrandSchema.parse)
 
   const db = useDb()
 

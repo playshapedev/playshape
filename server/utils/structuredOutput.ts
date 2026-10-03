@@ -1,5 +1,5 @@
 import { generateObject } from 'ai'
-import { z } from 'zod'
+import type { z } from 'zod'
 import { useActiveModel } from './llm'
 
 interface StructuredOutputOptions<T extends z.ZodObject<z.ZodRawShape>> {

@@ -9,8 +9,7 @@ const createTemplateSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = createTemplateSchema.parse(body)
+  const parsed = await readValidatedBody(event, createTemplateSchema.parse)
 
   const db = useDb()
   const now = new Date()

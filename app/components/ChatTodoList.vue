@@ -19,7 +19,7 @@ interface WriteTodosOutput {
   todos: TodoItem[]
 }
 
-const props = defineProps<{
+defineProps<{
   output: WriteTodosOutput
 }>()
 

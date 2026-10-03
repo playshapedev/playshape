@@ -10,6 +10,7 @@ export default defineConfig({
       'lib/**/*.test.ts',
       'app/utils/**/*.test.ts',
       'app/composables/**/*.test.ts',
+      'server/**/*.test.ts',
     ],
     exclude: [
       'node_modules/**',

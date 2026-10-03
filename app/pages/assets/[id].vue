@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { UIMessage } from '~/types/chat'
 definePageMeta({ noPadding: true })
 
 const route = useRoute()
@@ -72,10 +73,10 @@ async function handleSave() {
 
 // ─── Initial messages (stable reference) ────────────────────────────────────
 
-const initialMessages = ref<any[]>([])
+const initialMessages = ref<UIMessage[]>([])
 watch(() => asset.value?.messages, (messages) => {
   if (messages && !initialMessages.value.length) {
-    initialMessages.value = messages as any[]
+    initialMessages.value = messages as unknown as UIMessage[]
   }
 }, { immediate: true })
 

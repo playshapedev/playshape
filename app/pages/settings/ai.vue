@@ -30,7 +30,7 @@ async function toggleContentCleanup() {
 
 // ─── Provider Data ───────────────────────────────────────────────────────────
 
-const { providers, pending, refresh } = useAIProviders()
+const { providers, refresh } = useAIProviders()
 
 const activeTextModel = computed(() => getActiveTextModel(providers.value))
 const activeImageModel = computed(() => getActiveImageModel(providers.value))

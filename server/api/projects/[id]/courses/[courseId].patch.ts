@@ -16,8 +16,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Project ID and Course ID are required' })
   }
 
-  const body = await readBody(event)
-  const parsed = updateCourseSchema.parse(body)
+  const parsed = await readValidatedBody(event, updateCourseSchema.parse)
 
   const db = useDb()
 

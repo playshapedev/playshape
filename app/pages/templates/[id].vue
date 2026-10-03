@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { UIMessage } from '~/types/chat'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 
 definePageMeta({ noPadding: true })
@@ -135,10 +136,10 @@ const templatePreviewRef = ref<{ generateThumbnail: () => Promise<string | null>
 // TemplateChat only uses initialMessages in the Chat constructor — it doesn't need
 // to react to changes. Passing template.messages directly causes the whole chat to
 // re-render on every refresh() because useFetch returns a new array reference each time.
-const initialChatMessages = ref<any[]>([])
+const initialChatMessages = ref<UIMessage[]>([])
 watch(() => template.value?.messages, (messages) => {
   if (messages && !initialChatMessages.value.length) {
-    initialChatMessages.value = messages as any[]
+    initialChatMessages.value = messages as unknown as UIMessage[]
   }
 }, { immediate: true })
 

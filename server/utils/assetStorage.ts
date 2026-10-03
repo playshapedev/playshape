@@ -1,4 +1,4 @@
-import { join, extname } from 'node:path'
+import { join } from 'node:path'
 import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs'
 
 /**

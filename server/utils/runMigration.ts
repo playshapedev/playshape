@@ -52,9 +52,6 @@ export async function runMigration(
     // Make `global` available (some code expects it)
     await jail.set('global', jail.derefInto())
 
-    // Create a copy of the data that can be accessed in the isolate
-    const dataCopy = new ivm.ExternalCopy(data).copyInto()
-
     // Wrap the migration function in an IIFE that returns JSON
     // This ensures we get a serializable result back
     const wrappedCode = `
@@ -137,7 +134,6 @@ export async function runMigration(
 export function validateMigrationSyntax(migrationFn: string): string | null {
   try {
     // Try to parse the function body by wrapping it
-    // eslint-disable-next-line no-new-func
     new Function('data', migrationFn)
     return null
   }

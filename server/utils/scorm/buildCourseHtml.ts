@@ -218,13 +218,13 @@ function collectDependencies(course: CourseData): Array<{ name: string; url: str
 }
 
 function generateDependencyScriptTags(deps: Array<{ name: string; url: string; global: string }>): string {
-  return deps.map(dep => `  <script src="${dep.url}"><\/script>`).join('\n')
+  return deps.map(dep => `  <script src="${dep.url}"></script>`).join('\n')
 }
 
 // ─── Main HTML Generator ──────────────────────────────────────────────────────
 
 export function buildCourseHtml(options: BuildHtmlOptions): string {
-  const { course, scormVersion, brand, offline } = options
+  const { course, scormVersion, brand } = options
 
   // Determine interface SFC
   const interfaceSfc = course.interfaceSfc || getDefaultInterfaceSfc()
@@ -294,19 +294,19 @@ export function buildCourseHtml(options: BuildHtmlOptions): string {
       if (typeof arguments[0] === 'string' && arguments[0].indexOf('cdn.tailwindcss.com') !== -1) return;
       _origWarn.apply(console, arguments);
     };
-  <\/script>
-  <script src="https://cdn.tailwindcss.com"><\/script>
+  </script>
+  <script src="https://cdn.tailwindcss.com"></script>
 ${depScriptTags}
-  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>
-  <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader@0.9.5/dist/vue3-sfc-loader.js"><\/script>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader@0.9.5/dist/vue3-sfc-loader.js"></script>
   <script>
     // ── Course Data ───────────────────────────────────────────────────────────
     window.__PLAYSHAPE_COURSE__ = ${courseDataJson};
-  <\/script>
+  </script>
   <script>
     // ── CourseAPI (SCORM Adapter) ─────────────────────────────────────────────
 ${courseApiScript}
-  <\/script>
+  </script>
   <style>
     body { margin: 0; padding: 0; font-family: 'Poppins', system-ui, -apple-system, sans-serif; }
     #app { min-height: 100vh; }
@@ -451,13 +451,13 @@ ${brand ? `  <style id="brand-override">\n${brandCss}\n  </style>` : ''}
         },
       },
     }
-  <\/script>
+  </script>
 </head>
 <body>
   <div id="app"></div>
   <script>
 ${navBridgeScript}
-  <\/script>
+  </script>
   <script>
     // ── Mount Interface Template ──────────────────────────────────────────────
     (function() {
@@ -509,7 +509,7 @@ ${navBridgeScript}
 
       app.mount('#app');
     })();
-  <\/script>
+  </script>
 </body>
 </html>`
 }

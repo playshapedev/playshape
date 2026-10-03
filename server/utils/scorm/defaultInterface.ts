@@ -151,7 +151,7 @@ onUnmounted(() => {
     window.CourseAPI.terminate()
   }
 })
-<\/script>
+</script>
 `
 }
 

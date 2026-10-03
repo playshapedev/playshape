@@ -27,7 +27,7 @@ exports.default = async function (context) {
   try {
     ffmpegStatic = require('ffmpeg-static')
   }
-  catch (err) {
+  catch {
     console.warn('[afterPack] ffmpeg-static not found, skipping ffmpeg bundling')
     return
   }

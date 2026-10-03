@@ -163,7 +163,7 @@ ${fileElements}
  */
 function sanitizeIdentifier(str: string): string {
   // Replace invalid characters with underscores
-  let safe = str.replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+  let safe = str.replace(/[^a-zA-Z0-9_.-]/g, '_')
 
   // Ensure it starts with a letter or underscore
   if (!/^[a-zA-Z_]/.test(safe)) {

@@ -15,8 +15,7 @@ const createBrandSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = createBrandSchema.parse(body)
+  const parsed = await readValidatedBody(event, createBrandSchema.parse)
 
   const db = useDb()
   const now = new Date()

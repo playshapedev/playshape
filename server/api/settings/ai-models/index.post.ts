@@ -11,8 +11,7 @@ const createModelSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = createModelSchema.parse(body)
+  const parsed = await readValidatedBody(event, createModelSchema.parse)
 
   const db = useDb()
   const now = new Date()

@@ -8,8 +8,7 @@ const createProjectSchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event)
-  const parsed = createProjectSchema.parse(body)
+  const parsed = await readValidatedBody(event, createProjectSchema.parse)
 
   const db = useDb()
   const now = new Date()

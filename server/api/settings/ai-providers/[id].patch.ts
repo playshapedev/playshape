@@ -14,8 +14,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Provider ID is required' })
   }
 
-  const body = await readBody(event)
-  const parsed = updateProviderSchema.parse(body)
+  const parsed = await readValidatedBody(event, updateProviderSchema.parse)
 
   const db = useDb()
 

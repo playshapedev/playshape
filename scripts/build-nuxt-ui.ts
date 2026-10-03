@@ -16,9 +16,8 @@
  */
 
 import { build } from 'vite'
-import type { Plugin, PluginOption } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'node:fs'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
