@@ -1,5 +1,5 @@
 import { eq, and } from 'drizzle-orm'
-import { courses, courseSections, activities, templates, templateVersions } from '~~/server/database/schema'
+import { courses, courseSections, activities, activitySkills, templates, templateVersions } from '~~/server/database/schema'
 
 export default defineEventHandler((event) => {
   const projectId = getRouterParam(event, 'id')
@@ -29,11 +29,20 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 404, statusMessage: 'Activity not found in this course' })
   }
 
+  // Skills this activity practices
+  const skillIds = db
+    .select({ skillId: activitySkills.skillId })
+    .from(activitySkills)
+    .where(eq(activitySkills.activityId, activityId))
+    .all()
+    .map(row => row.skillId)
+
   // Fetch template info
   const tmpl = db.select().from(templates).where(eq(templates.id, activity.templateId)).get()
   if (!tmpl) {
     return {
       ...activity,
+      skillIds,
       template: null,
     }
   }
@@ -46,6 +55,7 @@ export default defineEventHandler((event) => {
   if (activityDataVersion >= latestTemplateVersion) {
     return {
       ...activity,
+      skillIds,
       template: {
         id: tmpl.id,
         name: tmpl.name,
@@ -77,6 +87,7 @@ export default defineEventHandler((event) => {
   if (versionSnapshot) {
     return {
       ...activity,
+      skillIds,
       template: {
         id: tmpl.id,
         name: tmpl.name,
@@ -98,6 +109,7 @@ export default defineEventHandler((event) => {
   // Use current template data but mark that upgrade is available
   return {
     ...activity,
+    skillIds,
     template: {
       id: tmpl.id,
       name: tmpl.name,

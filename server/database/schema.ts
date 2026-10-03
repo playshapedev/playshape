@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, primaryKey, index } from 'drizzle-orm/sqlite-core'
 
 // ─── Projects ────────────────────────────────────────────────────────────────
 
@@ -11,12 +11,32 @@ export const projects = sqliteTable('projects', {
 })
 
 // ─── Skills ──────────────────────────────────────────────────────────────────
+// Something learners should be able to *do* after practicing, scoped to a
+// project (e.g. "De-escalate an upset customer"). Activities link to the
+// skills they practice via activity_skills.
 
 export const skills = sqliteTable('skills', {
   id: text('id').primaryKey(),
   projectId: text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   description: text('description').default(''),
+  sortOrder: integer('sort_order').notNull().default(0),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
+})
+
+// ─── Objectives ──────────────────────────────────────────────────────────────
+// Measurable performance objectives that break a skill down. `statement` is the
+// observable action; `conditions` ("given…") and `criteria` ("to what
+// standard") are optional and make the objective measurable.
+
+export const objectives = sqliteTable('objectives', {
+  id: text('id').primaryKey(),
+  skillId: text('skill_id').notNull().references(() => skills.id, { onDelete: 'cascade' }),
+  statement: text('statement').notNull(),
+  conditions: text('conditions'),
+  criteria: text('criteria'),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
@@ -80,6 +100,19 @@ export const activities = sqliteTable('activities', {
   createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   updatedAt: integer('updated_at', { mode: 'timestamp_ms' }).notNull(),
 })
+
+// ─── Activity ↔ Skill (many-to-many) ─────────────────────────────────────────
+// Which skills an activity gives learners practice in. Skills and activities
+// must belong to the same project (enforced in the API layer).
+
+export const activitySkills = sqliteTable('activity_skills', {
+  activityId: text('activity_id').notNull().references(() => activities.id, { onDelete: 'cascade' }),
+  skillId: text('skill_id').notNull().references(() => skills.id, { onDelete: 'cascade' }),
+  linkedAt: integer('linked_at', { mode: 'timestamp_ms' }).notNull(),
+}, table => [
+  primaryKey({ columns: [table.activityId, table.skillId] }),
+  index('activity_skills_skill_id_idx').on(table.skillId),
+])
 
 // ─── Libraries ───────────────────────────────────────────────────────────────
 // Top-level knowledge containers. Designers upload source content into

@@ -183,6 +183,13 @@
       "when": 1771796740643,
       "tag": "0025_add_token_usage_to_entities",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1791053385567,
+      "tag": "0026_add_skill_objectives_and_activity_skills",
+      "breakpoints": true
     }
   ]
 }
