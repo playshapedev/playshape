@@ -32,6 +32,7 @@ export interface CourseDetail extends Omit<Course, 'projectId'> {
 }
 
 export interface ActivityDetail extends Activity {
+  skillIds: string[]
   template: {
     id: string
     name: string

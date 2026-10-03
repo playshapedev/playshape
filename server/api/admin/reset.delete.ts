@@ -1,5 +1,6 @@
 import {
   activities,
+  activitySkills,
   assetImages,
   assetVideos,
   assets,
@@ -9,6 +10,7 @@ import {
   documentChunks,
   documents,
   libraries,
+  objectives,
   projectLibraries,
   projects,
   skills,
@@ -43,6 +45,7 @@ export default defineEventHandler(async () => {
   // (children before parents, junction tables first)
 
   // Activities and related
+  db.delete(activitySkills).run()
   db.delete(activities).run()
 
   // Course structure
@@ -50,6 +53,7 @@ export default defineEventHandler(async () => {
   db.delete(courses).run()
 
   // Skills
+  db.delete(objectives).run()
   db.delete(skills).run()
 
   // Template related

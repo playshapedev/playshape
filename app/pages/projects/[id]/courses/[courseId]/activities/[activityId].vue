@@ -80,6 +80,45 @@ async function handleSave() {
   }
 }
 
+// ─── Skills ──────────────────────────────────────────────────────────────────
+
+const { skills: projectSkills, refresh: refreshProjectSkills } = useProjectSkills(projectId)
+
+const showSkillsModal = ref(false)
+const selectedSkillIds = ref<string[]>([])
+const savingSkills = ref(false)
+
+const linkedSkillCount = computed(() => activity.value?.skillIds?.length ?? 0)
+
+function openSkills() {
+  selectedSkillIds.value = [...(activity.value?.skillIds ?? [])]
+  refreshProjectSkills()
+  showSkillsModal.value = true
+}
+
+function toggleSkill(skillId: string, checked: boolean) {
+  selectedSkillIds.value = checked
+    ? [...selectedSkillIds.value, skillId]
+    : selectedSkillIds.value.filter(id => id !== skillId)
+}
+
+async function handleSaveSkills() {
+  savingSkills.value = true
+  try {
+    await setActivitySkills(projectId, courseId, activityId, selectedSkillIds.value)
+    showSkillsModal.value = false
+    await refresh()
+    toast.add({ title: 'Skills updated', color: 'success' })
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to update skills', description: message, color: 'error' })
+  }
+  finally {
+    savingSkills.value = false
+  }
+}
+
 // ─── Clear Chat ──────────────────────────────────────────────────────────────
 
 const showClearChatModal = ref(false)
@@ -385,6 +424,16 @@ watch(formData, () => {
         @click="showUpgradeModal = true"
       />
     </UTooltip>
+    <UTooltip text="Skills practiced">
+      <UButton
+        icon="i-lucide-target"
+        :label="linkedSkillCount ? String(linkedSkillCount) : undefined"
+        color="neutral"
+        variant="ghost"
+        size="sm"
+        @click="openSkills"
+      />
+    </UTooltip>
     <UTooltip text="Swap layout">
       <UButton
         :icon="chatPosition === 'left' ? 'i-lucide-panel-right-open' : 'i-lucide-panel-left-open'"
@@ -515,6 +564,52 @@ watch(formData, () => {
       <div class="flex justify-end gap-2">
         <UButton label="Cancel" color="neutral" variant="ghost" @click="showEditModal = false" />
         <UButton label="Save" :loading="saving" :disabled="!editName.trim()" @click="handleSave" />
+      </div>
+    </template>
+  </UModal>
+
+  <!-- Skills modal -->
+  <UModal v-model:open="showSkillsModal">
+    <template #header>
+      <div>
+        <h3 class="text-lg font-semibold">Skills Practiced</h3>
+        <p class="text-sm text-muted">Choose the skills this activity gives learners practice in.</p>
+      </div>
+    </template>
+    <template #body>
+      <div v-if="!projectSkills?.length" class="py-4 text-center">
+        <p class="text-muted">This project has no skills yet.</p>
+        <NuxtLink :to="`/projects/${projectId}/skills`" class="text-sm text-primary hover:underline mt-2 inline-block">
+          Define skills
+        </NuxtLink>
+      </div>
+      <div v-else class="space-y-2">
+        <label
+          v-for="skill in projectSkills"
+          :key="skill.id"
+          class="flex items-start gap-3 p-3 rounded-lg border border-default hover:border-primary/50 cursor-pointer transition-colors"
+        >
+          <UCheckbox
+            :model-value="selectedSkillIds.includes(skill.id)"
+            class="mt-0.5"
+            @update:model-value="toggleSkill(skill.id, $event === true)"
+          />
+          <div class="flex-1 min-w-0">
+            <p class="font-medium text-highlighted">{{ skill.name }}</p>
+            <p v-if="skill.description" class="text-xs text-dimmed line-clamp-2">{{ skill.description }}</p>
+          </div>
+        </label>
+      </div>
+    </template>
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <UButton label="Cancel" color="neutral" variant="ghost" @click="showSkillsModal = false" />
+        <UButton
+          label="Save"
+          :loading="savingSkills"
+          :disabled="!projectSkills?.length"
+          @click="handleSaveSkills"
+        />
       </div>
     </template>
   </UModal>
