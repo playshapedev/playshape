@@ -13,27 +13,14 @@
  * composable (e.g., to show a project name instead of "Project").
  */
 
-export interface NavTab {
-  /** Route path segment appended to the parent (empty string = index route) */
-  path: string
-  /** Display label */
-  label: string
-  /** Optional icon */
-  icon?: string
-}
+import {
+  resolveNavItem as resolveNavItemBase,
+  resolveTab as resolveTabBase,
+  type NavItem,
+  type NavTab,
+} from '../../lib/navigation/resolver'
 
-export interface NavItem {
-  /** Route path pattern (e.g. '/projects', '/projects/:id') */
-  path: string
-  /** Default title shown in the navbar */
-  title: string
-  /** Icon displayed next to the title */
-  icon?: string
-  /** Nested pages — detail/sub pages under this section */
-  children?: NavItem[]
-  /** Route-based tabs rendered below the navbar */
-  tabs?: NavTab[]
-}
+export type { NavItem, NavTab }
 
 export const navigation: NavItem[] = [
   {
@@ -102,34 +89,13 @@ export const navigation: NavItem[] = [
  * matches the '/projects/:id' child and its parent '/projects'.
  */
 export function resolveNavItem(routePath: string): { item: NavItem | null, parent: NavItem | null } {
-  for (const item of navigation) {
-    // Exact match on top-level
-    if (routePath === item.path) {
-      return { item, parent: null }
-    }
+  return resolveNavItemBase(routePath, navigation)
+}
 
-    // Top-level items with tabs: match tab sub-routes
-    // e.g. '/settings/providers' matches '/settings' with tabs
-    if (item.tabs?.length) {
-      const regex = new RegExp(`^${item.path}/.+$`)
-      if (regex.test(routePath)) {
-        return { item, parent: null }
-      }
-    }
-
-    // Check children
-    if (item.children) {
-      for (const child of item.children) {
-        // Match dynamic segments: '/projects/:id' matches '/projects/abc-123'
-        // Also match tab sub-routes: '/projects/:id/libraries' matches '/projects/abc-123/libraries'
-        const pattern = child.path.replace(/:[\w]+/g, '[^/]+')
-        const regex = new RegExp(`^${pattern}(/.*)?$`)
-        if (regex.test(routePath)) {
-          return { item: child, parent: item }
-        }
-      }
-    }
-  }
-
-  return { item: null, parent: null }
+/**
+ * Find a tab matching a route path within a nav item's tabs.
+ * Returns the matching tab or null if no match.
+ */
+export function resolveTab(routePath: string, parentPath: string, tabs: NavTab[]): NavTab | null {
+  return resolveTabBase(routePath, parentPath, tabs)
 }

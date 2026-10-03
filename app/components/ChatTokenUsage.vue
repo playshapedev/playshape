@@ -35,34 +35,25 @@ const displayValue = computed(() => {
   return null
 })
 
-const tooltip = computed(() => {
-  const parts: string[] = []
+const conversationLabel = computed(() => {
+  if (!props.totalTokens) return null
+  return props.totalTokens.toLocaleString()
+})
 
-  // Conversation stats (primary)
-  parts.push('This conversation')
-  if (props.totalTokens) {
-    parts.push(`${props.totalTokens.toLocaleString()} tokens`)
-  }
-  if (props.contextTokens) {
-    parts.push(`Context: ${props.contextTokens.toLocaleString()}`)
-  }
-  if (props.wasCompacted) {
-    parts.push('(compacted)')
-  }
+const contextLabel = computed(() => {
+  if (!props.contextTokens) return null
+  return props.contextTokens.toLocaleString()
+})
 
-  // Total provider usage (secondary)
-  if (providerUsage.value?.totals?.totalTokens) {
-    parts.push('')
-    parts.push(`All time: ${formatTokens(providerUsage.value.totals.totalTokens)} tokens`)
-  }
-
-  return parts.join('\n') || 'Token usage'
+const allTimeLabel = computed(() => {
+  if (!providerUsage.value?.totals?.totalTokens) return null
+  return formatTokens(providerUsage.value.totals.totalTokens)
 })
 </script>
 
 <template>
-  <UTooltip v-if="displayValue" :text="tooltip">
-    <div class="flex items-center gap-1 text-xs text-muted font-mono">
+  <UTooltip v-if="displayValue" :ui="{ content: 'h-auto py-2 px-3' }">
+    <div class="flex items-center gap-1 text-xs text-muted font-mono select-none cursor-default">
       <UIcon
         :name="wasCompacted ? 'i-lucide-archive' : 'i-lucide-coins'"
         class="size-3"
@@ -70,5 +61,29 @@ const tooltip = computed(() => {
       />
       <span>{{ displayValue }}</span>
     </div>
+
+    <template #content>
+      <div class="text-xs space-y-1.5">
+        <div class="font-medium text-highlighted">This conversation</div>
+        <div v-if="conversationLabel" class="flex justify-between gap-4">
+          <span class="text-muted">Tokens:</span>
+          <span class="font-mono">{{ conversationLabel }}</span>
+        </div>
+        <div v-if="contextLabel" class="flex justify-between gap-4">
+          <span class="text-muted">Context:</span>
+          <span class="font-mono">{{ contextLabel }}</span>
+        </div>
+        <div v-if="wasCompacted" class="text-warning text-xs">
+          Context was compacted
+        </div>
+        <template v-if="allTimeLabel">
+          <div class="border-t border-default my-1.5" />
+          <div class="flex justify-between gap-4">
+            <span class="text-muted">All time:</span>
+            <span class="font-mono">{{ allTimeLabel }}</span>
+          </div>
+        </template>
+      </div>
+    </template>
   </UTooltip>
 </template>

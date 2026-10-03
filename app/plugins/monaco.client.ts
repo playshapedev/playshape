@@ -6,6 +6,11 @@
 import { loader } from '@guolao/vue-monaco-editor'
 
 export default defineNuxtPlugin(() => {
+  // Skip in test environment where Monaco loader may not be available
+  if (process.env.NODE_ENV === 'test' || !loader.config) {
+    return
+  }
+
   // Configure Monaco to load from CDN
   // Using the same version as our activity tools (0.52.2)
   loader.config({

@@ -1,0 +1,344 @@
+{
+  "feature": "testing-infrastructure",
+  "createdAt": "2026-03-21T10:30:00Z",
+  "requirements": [
+    {
+      "id": "cfg-001",
+      "category": "technical",
+      "description": "Vitest is installed and configured for the project",
+      "steps": [
+        "Check package.json for vitest dependency",
+        "Verify vitest is installed in node_modules",
+        "Review vitest.config.ts configuration file",
+        "Confirm test environment is set to 'happy-dom' or 'jsdom'",
+        "Verify configuration extends Nuxt's default config"
+      ],
+      "passes": true
+    },
+    {
+      "id": "cfg-002",
+      "category": "technical",
+      "description": "@nuxt/test-utils is properly configured",
+      "steps": [
+        "Verify @nuxt/test-utils is installed",
+        "Check nuxt.config.ts for testUtils module configuration",
+        "Review test-utils configuration in vitest.config.ts",
+        "Confirm setup files include Nuxt test utils setup",
+        "Verify nuxt-shim is properly configured"
+      ],
+      "passes": true
+    },
+    {
+      "id": "cfg-003",
+      "category": "technical",
+      "description": "Test scripts added to package.json",
+      "steps": [
+        "Verify 'test' script runs vitest",
+        "Check 'test:unit' script exists for unit tests only",
+        "Verify 'test:ui' script opens Vitest UI",
+        "Confirm 'test:coverage' script runs with coverage",
+        "Check 'test:ci' script exists for CI with proper flags"
+      ],
+      "passes": true
+    },
+    {
+      "id": "dir-001",
+      "category": "technical",
+      "description": "Test files follow co-located naming convention",
+      "steps": [
+        "Verify spec files use .spec.ts extension",
+        "Confirm test files are next to source files (Component.vue + Component.spec.ts)",
+        "Check composables have corresponding .spec.ts files",
+        "Verify utilities have corresponding .spec.ts files",
+        "Ensure test files are excluded from production builds"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cov-001",
+      "category": "technical",
+      "description": "Coverage reporting is configured with v8 provider",
+      "steps": [
+        "Verify @vitest/coverage-v8 is installed",
+        "Review coverage configuration in vitest.config.ts",
+        "Confirm coverage reports to coverage/ directory",
+        "Check coverage includes all source files appropriately",
+        "Verify coverage excludes test files and config files"
+      ],
+      "passes": false
+    },
+    {
+      "id": "cov-002",
+      "category": "technical",
+      "description": "Coverage thresholds are configured but not enforced",
+      "steps": [
+        "Review coverage thresholds in vitest.config.ts",
+        "Confirm thresholds are set to 0 or low values",
+        "Verify coverage report generates HTML output",
+        "Check coverage report generates text output for CLI",
+        "Ensure coverage doesn't block test execution"
+      ],
+      "passes": false
+    },
+    {
+      "id": "util-001",
+      "category": "technical",
+      "description": "Test utilities and helpers are created",
+      "steps": [
+        "Verify tests/utils/ directory exists",
+        "Check for mountHelper.ts for component mounting",
+        "Confirm mockHelpers.ts exists for common mocks",
+        "Review databaseTestHelper.ts for DB testing",
+        "Verify test utilities are properly exported"
+      ],
+      "passes": false
+    },
+    {
+      "id": "util-002",
+      "category": "technical",
+      "description": "Mock utilities for Electron APIs exist",
+      "steps": [
+        "Verify Electron IPC mocks are configured",
+        "Check safeStorage mock implementation",
+        "Confirm dialog mock for file operations",
+        "Review app/window management mocks",
+        "Verify mocks are easily importable in tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "util-003",
+      "category": "technical",
+      "description": "Mock utilities for Capacitor plugins exist",
+      "steps": [
+        "Verify @capacitor-community/sqlite mock exists",
+        "Check keychain/secure storage mocks",
+        "Confirm filesystem plugin mocks",
+        "Review network/HTTP plugin mocks",
+        "Verify platform detection mocks"
+      ],
+      "passes": false
+    },
+    {
+      "id": "ex-001",
+      "category": "testing",
+      "description": "Example composable test exists and passes",
+      "steps": [
+        "Verify at least one composable has a .spec.ts file",
+        "Check test uses mountSuspended or unit test approach",
+        "Confirm test verifies composable behavior",
+        "Verify test imports from #imports for auto-imports",
+        "Run test and confirm it passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "ex-002",
+      "category": "testing",
+      "description": "Example component test exists and passes",
+      "steps": [
+        "Verify at least one Vue component has a .spec.ts file",
+        "Check test uses mountSuspended from @nuxt/test-utils",
+        "Confirm test renders component correctly",
+        "Verify test can interact with component (click, input)",
+        "Run test and confirm it passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "ex-003",
+      "category": "testing",
+      "description": "Example utility test exists and passes",
+      "steps": [
+        "Verify at least one utility has a .spec.ts file",
+        "Check test covers pure function logic",
+        "Confirm test includes edge cases",
+        "Verify test uses Vitest expect matchers",
+        "Run test and confirm it passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-001",
+      "category": "technical",
+      "description": "Database testing setup for Drizzle ORM",
+      "steps": [
+        "Verify test database configuration exists",
+        "Check in-memory SQLite setup for tests",
+        "Confirm migration running in test setup",
+        "Review transaction rollback between tests",
+        "Verify test helpers for seeding test data"
+      ],
+      "passes": false
+    },
+    {
+      "id": "db-002",
+      "category": "technical",
+      "description": "Server API testing utilities exist",
+      "steps": [
+        "Verify setup for testing Nitro server routes",
+        "Check supertest or similar HTTP testing setup",
+        "Confirm test database isolation for API tests",
+        "Review authentication mocking for protected routes",
+        "Verify example API test exists and passes"
+      ],
+      "passes": false
+    },
+    {
+      "id": "int-001",
+      "category": "ui",
+      "description": "Testing documentation exists in project",
+      "steps": [
+        "Verify TESTING.md file exists in project root",
+        "Check documentation covers running tests",
+        "Confirm documentation explains test organization",
+        "Review section on writing new tests",
+        "Verify documentation includes troubleshooting"
+      ],
+      "passes": false
+    },
+    {
+      "id": "int-002",
+      "category": "ui",
+      "description": "VS Code extensions recommendations include testing tools",
+      "steps": [
+        "Check .vscode/extensions.json exists",
+        "Verify Vitest extension is recommended",
+        "Confirm recommended extensions for Vue testing",
+        "Review debug configuration for tests in .vscode/launch.json",
+        "Verify extension recommendations are helpful"
+      ],
+      "passes": false
+    },
+    {
+      "id": "ci-001",
+      "category": "integration",
+      "description": "GitHub Actions workflow runs tests on PR",
+      "steps": [
+        "Verify .github/workflows/test.yml exists",
+        "Check workflow triggers on pull requests",
+        "Confirm workflow runs on main branch pushes",
+        "Verify workflow installs dependencies and runs tests",
+        "Check workflow uploads coverage reports as artifacts"
+      ],
+      "passes": false
+    },
+    {
+      "id": "ci-002",
+      "category": "integration",
+      "description": "CI test workflow handles all platforms",
+      "steps": [
+        "Verify workflow runs on ubuntu-latest",
+        "Check if macos-latest and windows-latest included",
+        "Confirm Node.js version matches project requirements",
+        "Review caching strategy for node_modules",
+        "Verify workflow completes in reasonable time"
+      ],
+      "passes": false
+    },
+    {
+      "id": "mock-001",
+      "category": "technical",
+      "description": "AI SDK mocks exist for testing",
+      "steps": [
+        "Verify generateObject mock implementation",
+        "Check streamText mock for streaming responses",
+        "Confirm mock supports Zod schema validation",
+        "Review mock for provider configurations",
+        "Verify AI SDK mocks are importable from test utils"
+      ],
+      "passes": false
+    },
+    {
+      "id": "mock-002",
+      "category": "technical",
+      "description": "Transformers.js mocks exist for embeddings",
+      "steps": [
+        "Verify Transformers.js pipeline mock",
+        "Check embedding generation mock returns vector array",
+        "Confirm mock handles model loading states",
+        "Review error handling mock scenarios",
+        "Verify mock doesn't attempt actual model loading in tests"
+      ],
+      "passes": false
+    },
+    {
+      "id": "qual-001",
+      "category": "testing",
+      "description": "All existing composables have passing tests",
+      "steps": [
+        "Identify all composables in app/composables/",
+        "Verify each has a corresponding .spec.ts file",
+        "Run all composable tests and confirm pass",
+        "Check tests cover happy paths and edge cases",
+        "Verify no composables are untested"
+      ],
+      "passes": false
+    },
+    {
+      "id": "qual-002",
+      "category": "testing",
+      "description": "All existing utilities have passing tests",
+      "steps": [
+        "Identify all utilities in app/utils/",
+        "Verify each has a corresponding .spec.ts file",
+        "Run all utility tests and confirm pass",
+        "Check tests cover function logic thoroughly",
+        "Verify no utilities are untested"
+      ],
+      "passes": false
+    },
+    {
+      "id": "qual-003",
+      "category": "testing",
+      "description": "Critical components have passing tests",
+      "steps": [
+        "Identify critical UI components (ProviderSwitcher, etc.)",
+        "Verify each has a corresponding .spec.ts file",
+        "Run component tests and confirm pass",
+        "Check tests verify component rendering and interaction",
+        "Document any components intentionally excluded"
+      ],
+      "passes": false
+    },
+    {
+      "id": "perf-001",
+      "category": "performance",
+      "description": "Tests run in parallel for fast feedback",
+      "steps": [
+        "Verify vitest.config.ts has parallel test execution",
+        "Check that tests don't have race conditions",
+        "Confirm database tests use separate connections",
+        "Review test duration - should complete in under 30s",
+        "Verify watch mode is responsive for development"
+      ],
+      "passes": false
+    },
+    {
+      "id": "sec-001",
+      "category": "security",
+      "description": "Test environment doesn't use production secrets",
+      "steps": [
+        "Verify .env.test or test environment config exists",
+        "Check that API keys in tests are mock/fake values",
+        "Confirm test database is isolated from production",
+        "Review that no real LLM calls happen in tests",
+        "Verify CI doesn't have access to production secrets"
+      ],
+      "passes": false
+    },
+    {
+      "id": "type-001",
+      "category": "technical",
+      "description": "TypeScript types work correctly in tests",
+      "steps": [
+        "Verify tests use TypeScript with strict mode",
+        "Check that auto-imports are typed correctly in tests",
+        "Confirm Nuxt types are available in test context",
+        "Review that component props are typed in tests",
+        "Verify no 'any' types without justification"
+      ],
+      "passes": false
+    }
+  ]
+}

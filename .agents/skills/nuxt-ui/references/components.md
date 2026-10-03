@@ -25,7 +25,7 @@ Essential UI building blocks.
 | `UBadge` | `label`, `color`, `variant`, `size` |
 | `UAvatar` | `src`, `alt`, `icon`, `text`, `size` |
 | `UAvatarGroup` | `max`, `size` — wraps multiple `UAvatar` |
-| `UIcon` | `name`, `size` |
+| `UIcon` | `name` (format: `i-lucide-{icon}` e.g. `i-lucide-check`, `i-lucide-star`), `size` |
 | `UCard` | `variant` — slots: `#header`, `#default`, `#footer` |
 | `UAlert` | `title`, `description`, `icon`, `color`, `variant`, `close` |
 | `UBanner` | `title`, `icon`, `close` — sticky top banner |

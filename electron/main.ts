@@ -2,7 +2,6 @@ import { app, BrowserWindow, ipcMain, Menu, nativeImage, nativeTheme, net, scree
 import type { UtilityProcess } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
-import os from 'node:os'
 import { createServer } from 'node:net'
 
 // The built directory structure
@@ -25,6 +24,9 @@ const APP_ICON = path.join(process.env.BUILD, 'icons', 'icon.png')
 // Production Nitro server management
 let nitroProcess: UtilityProcess | null = null
 let nitroUrl: string | null = null
+
+// Base URL for the app (dev server or Nitro server) - used for thumbnail generation
+let appBaseUrl: string | null = null
 
 // Set the app name (used for dock hover, window title bar, etc.)
 // Without this, Electron defaults to "Electron" in development.
@@ -93,12 +95,18 @@ async function startNitroServer(): Promise<string> {
     ? path.join(process.resourcesPath, 'migrations')
     : path.join(__dirname, '..', 'server', 'database', 'migrations')
 
+  // Resolve the defaults folder — bundled as extraResource by electron-builder
+  const defaultsPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'defaults')
+    : path.join(__dirname, '..', 'server', 'database', 'defaults')
+
   // User data directory for the SQLite database
   const userDataPath = path.join(app.getPath('userData'), 'data')
 
   console.log(`[nitro] Starting server on port ${port}`)
   console.log(`[nitro] Server entry: ${serverEntry}`)
   console.log(`[nitro] Migrations: ${migrationsPath}`)
+  console.log(`[nitro] Defaults: ${defaultsPath}`)
   console.log(`[nitro] User data: ${userDataPath}`)
 
   nitroProcess = utilityProcess.fork(serverEntry, [], {
@@ -109,6 +117,7 @@ async function startNitroServer(): Promise<string> {
       NITRO_HOST: '127.0.0.1',
       PLAYSHAPE_USER_DATA: userDataPath,
       PLAYSHAPE_MIGRATIONS_PATH: migrationsPath,
+      PLAYSHAPE_DEFAULTS_PATH: defaultsPath,
       PLAYSHAPE_RESOURCES_PATH: process.resourcesPath, // For bundled binaries (ffmpeg, etc.)
     },
     stdio: 'pipe',
@@ -287,45 +296,45 @@ async function createWindow() {
   })
 
   // ── Thumbnail generation ────────────────────────────────────────────────────
-  // Creates a hidden offscreen BrowserWindow, loads the template's iframe HTML,
-  // sends the SFC + data via executeJavaScript, waits for the component to mount,
-  // then captures a screenshot using webContents.capturePage().
+  // Creates a hidden offscreen BrowserWindow, loads the preview URL, sends
+  // init and update payloads via postMessage (same protocol as the actual
+  // preview iframe), waits for the component to mount, then captures a
+  // screenshot using webContents.capturePage().
   // Returns a base64-encoded JPEG data URL (small file size for card thumbnails).
-  //
-  // Key implementation detail: The srcdoc HTML loads external CDN scripts (Vue,
-  // Tailwind, vue3-sfc-loader). A `data:` URL cannot load external sub-resources
-  // in Electron, so we write the HTML to a temp file and load that via `file://`.
-  // We use `did-finish-load` (not `dom-ready`) to wait for all scripts to load,
-  // then poll for `window.Vue` before sending the component to mount.
   ipcMain.handle('generate-thumbnail', async (_event, args: {
-    srcdoc: string
-    sfc: string
-    data: Record<string, unknown>
-    depMappings: Record<string, string>
-    brandCSS?: string
-    brandFontLink?: string
+    url: string
+    initPayload: {
+      dependencies: Array<{ name: string, url: string, global: string }>
+      tools: Array<{ id: string, headHtml: string, setupJs: string }>
+      dark: boolean
+    }
+    updatePayload: {
+      type: 'update'
+      sfc: string
+      data: Record<string, unknown>
+      depMappings: Record<string, string>
+      nuxtUI?: {
+        components: string[]
+        icons: Array<{ id: string, collection: string, name: string }>
+        optionalChunks?: string[]
+      } | null
+      slotContent?: unknown
+    }
+    brandPayload?: {
+      css: string
+      fontLink?: string
+    }
   }) => {
     const THUMBNAIL_WIDTH = 800
     const THUMBNAIL_HEIGHT = 600
-    const CAPTURE_TIMEOUT = 20000 // 20s max wait for render
+    const CAPTURE_TIMEOUT = 30000 // 30s max wait for render
 
-    // Inject brand CSS and font link into the srcdoc if provided
-    let srcdoc = args.srcdoc
-    if (args.brandCSS || args.brandFontLink) {
-      const brandTags: string[] = []
-      if (args.brandFontLink) {
-        brandTags.push(`<link id="brand-font" rel="stylesheet" href="${args.brandFontLink}">`)
-      }
-      if (args.brandCSS) {
-        brandTags.push(`<style id="brand-override">${args.brandCSS}</style>`)
-      }
-      // Insert before </head> so brand overrides load with the page
-      srcdoc = srcdoc.replace('</head>', `${brandTags.join('\n')}\n</head>`)
+    // Resolve relative URL against app base URL
+    let fullUrl = args.url
+    if (args.url.startsWith('/') && appBaseUrl) {
+      fullUrl = new URL(args.url, appBaseUrl).toString()
     }
-
-    // Write srcdoc to a temp file — data: URLs block external script loading
-    const tmpFile = path.join(os.tmpdir(), `playshape-thumb-${Date.now()}.html`)
-    fs.writeFileSync(tmpFile, srcdoc, 'utf-8')
+    console.log(`[thumbnail] Loading URL: ${fullUrl}`)
 
     const offscreen = new BrowserWindow({
       width: THUMBNAIL_WIDTH,
@@ -344,31 +353,88 @@ async function createWindow() {
           reject(new Error('Thumbnail capture timed out'))
         }, CAPTURE_TIMEOUT)
 
+        offscreen.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+          clearTimeout(timeout)
+          reject(new Error(`Failed to load preview: ${errorDescription} (${errorCode})`))
+        })
+
         offscreen.webContents.on('did-finish-load', async () => {
           try {
+            console.log('[thumbnail] Page loaded, waiting for Vue...')
             // Poll until Vue and vue3-sfc-loader are available (CDN scripts loaded)
-            const maxWait = 10000
+            const maxWait = 15000
             const start = Date.now()
+            let vueReady = false
             while (Date.now() - start < maxWait) {
               const ready = await offscreen.webContents.executeJavaScript(
                 `!!(window.Vue && window['vue3-sfc-loader'])`,
               )
-              if (ready) break
+              if (ready) {
+                vueReady = true
+                break
+              }
               await new Promise(r => setTimeout(r, 200))
             }
 
-            // Send the update message — the page's message listener calls mountComponent
+            if (!vueReady) {
+              throw new Error('Vue/vue3-sfc-loader did not load within timeout')
+            }
+            console.log('[thumbnail] Vue ready, sending init...')
+
+            // Send init message (dependencies, tools, dark mode)
             await offscreen.webContents.executeJavaScript(`
               window.postMessage({
-                type: 'update',
-                sfc: ${JSON.stringify(args.sfc)},
-                data: ${JSON.stringify(args.data)},
-                depMappings: ${JSON.stringify(args.depMappings)}
+                type: 'init',
+                dependencies: ${JSON.stringify(args.initPayload.dependencies)},
+                tools: ${JSON.stringify(args.initPayload.tools)},
+                dark: ${JSON.stringify(args.initPayload.dark)}
               }, '*');
             `)
 
-            // Wait for the component to mount and render (Tailwind JIT needs time too)
-            await new Promise(r => setTimeout(r, 2000))
+            // Wait for dependencies and tools to load
+            await new Promise(r => setTimeout(r, 1000))
+            console.log('[thumbnail] Sending update...')
+
+            // Send brand payload if provided
+            if (args.brandPayload) {
+              await offscreen.webContents.executeJavaScript(`
+                window.postMessage({
+                  type: 'brand',
+                  css: ${JSON.stringify(args.brandPayload.css)},
+                  fontLink: ${JSON.stringify(args.brandPayload.fontLink || null)}
+                }, '*');
+              `)
+              await new Promise(r => setTimeout(r, 500))
+            }
+
+            // Send update message - pass the entire payload as-is (same structure as buildUpdatePayload)
+            await offscreen.webContents.executeJavaScript(`
+              window.postMessage(${JSON.stringify(args.updatePayload)}, '*');
+            `)
+
+            // Wait for the component to mount and render
+            // Poll for the app element to have content (indicates Vue mounted)
+            console.log('[thumbnail] Waiting for component to mount...')
+            const mountMaxWait = 10000
+            const mountStart = Date.now()
+            while (Date.now() - mountStart < mountMaxWait) {
+              const hasContent = await offscreen.webContents.executeJavaScript(`
+                (() => {
+                  const app = document.getElementById('app');
+                  // Check if app has meaningful content (not empty or just error/loading state)
+                  return app && app.children.length > 0 && !app.querySelector('.preview-empty') && !app.querySelector('.preview-error');
+                })()
+              `)
+              if (hasContent) {
+                console.log('[thumbnail] Component mounted')
+                break
+              }
+              await new Promise(r => setTimeout(r, 200))
+            }
+
+            // Extra wait for Tailwind JIT and any animations to settle
+            await new Promise(r => setTimeout(r, 1500))
+            console.log('[thumbnail] Capturing...')
 
             // Capture the page
             const image = await offscreen.webContents.capturePage()
@@ -384,16 +450,14 @@ async function createWindow() {
           }
         })
 
-        // Load the temp file
-        offscreen.loadFile(tmpFile)
+        // Load the preview URL
+        offscreen.loadURL(fullUrl)
       })
 
       return result
     }
     finally {
       offscreen.destroy()
-      // Clean up temp file
-      try { fs.unlinkSync(tmpFile) } catch { /* ignore cleanup errors */ }
     }
   })
 
@@ -440,9 +504,11 @@ async function createWindow() {
       `).catch(() => {})
     })
 
-    mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
+    appBaseUrl = process.env.VITE_DEV_SERVER_URL
+    mainWindow.loadURL(appBaseUrl)
   }
   else if (nitroUrl) {
+    appBaseUrl = nitroUrl
     mainWindow.loadURL(nitroUrl)
   }
   else {

@@ -7,6 +7,8 @@ import type { TemplateField, TemplateDependency } from '~~/server/database/schem
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
 import { getReferenceTool } from '~~/server/utils/tools/getReference'
 import { fieldSchema } from '~~/server/utils/tools/fieldSchema'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { hasSchemaChanged } from '~~/server/utils/schemaEquality'
 import { runMigration, validateMigrationSyntax } from '~~/server/utils/runMigration'
 import { validateDataAgainstSchema } from '~~/server/utils/buildZodFromInputSchema'
@@ -55,6 +57,11 @@ export default defineLazyEventHandler(() => {
       throw createError({ statusCode: 404, statusMessage: 'Template not found' })
     }
 
+    // Default templates are immutable — no AI chat allowed
+    if (tmpl.source === 'default') {
+      throw createError({ statusCode: 403, statusMessage: 'Default templates cannot be edited. Use "Use Template" to create an editable copy.' })
+    }
+
     // Load system prompts (cached after first call)
     const prompts = await useSystemPrompts()
     const baseSystemPrompt = tmpl.kind === 'interface'
@@ -89,6 +96,8 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       get_reference: getReferenceTool,
+      write_todos: createWriteTodosTool('template', id),
+      get_todos: createGetTodosTool('template', id),
       get_template: tool({
         description: 'Retrieve the current template state including name, description, input schema (field definitions), and Vue component source. Use this to inspect what has been built so far before making changes. ALWAYS call this before making updates.',
         inputSchema: z.object({}),
@@ -223,44 +232,8 @@ export default defineLazyEventHandler(() => {
                 }
               }
 
-              // No affected activities - can proceed with version bump
-              const newVersion = current.schemaVersion + 1
-
-              // Create new version snapshot
-              db.insert(templateVersions).values({
-                id: crypto.randomUUID(),
-                templateId: id,
-                version: newVersion,
-                inputSchema: fields as TemplateField[],
-                component,
-                sampleData,
-                dependencies: (dependencies as TemplateDependency[]) || [],
-                tools: toolIds || [],
-                createdAt: new Date(),
-              }).run()
-
-              // Update template
-              db.update(templates)
-                .set({
-                  schemaVersion: newVersion,
-                  inputSchema: fields as TemplateField[],
-                  component,
-                  sampleData,
-                  dependencies: (dependencies as TemplateDependency[]) || [],
-                  tools: toolIds || [],
-                  componentLastModifiedAt: new Date(),
-                  componentLastReadAt: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(templates.id, id))
-                .run()
-
-              // Check for warnings (non-blocking)
-              const warnings = validateTemplate(fields as TemplateField[], sampleData as Record<string, unknown>, component)
-              if (warnings.length > 0) {
-                return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
-              }
-              return { success: true, fieldCount: fields.length, schemaVersion: newVersion, versionBumped: true }
+              // No affected activities - schema can change without versioning
+              // Just update the template and current version snapshot (same as non-schema-change path)
             }
 
             // No schema change - update template and current version snapshot
@@ -456,54 +429,13 @@ export default defineLazyEventHandler(() => {
               patched = patched.substring(0, firstIdx) + replace + patched.substring(firstIdx + search.length)
             }
 
-            // Check if this is a schema version bump (fields changed but no affected activities)
-            const schemaChanged = fields && hasSchemaChanged(
-              current.inputSchema as TemplateField[] | null,
-              fields as TemplateField[],
-            )
-
-            if (schemaChanged) {
-              // No affected activities - can proceed with version bump
-              const newVersion = current.schemaVersion + 1
-
-              // Create new version snapshot
-              db.insert(templateVersions).values({
-                id: crypto.randomUUID(),
-                templateId: id,
-                version: newVersion,
-                inputSchema: fields as TemplateField[],
-                component: patched,
-                sampleData: sampleData ?? current.sampleData,
-                dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
-                tools: toolIds ?? current.tools ?? [],
-                createdAt: new Date(),
-              }).run()
-
-              // Update template
-              db.update(templates)
-                .set({
-                  schemaVersion: newVersion,
-                  inputSchema: fields as TemplateField[],
-                  component: patched,
-                  sampleData: sampleData ?? current.sampleData,
-                  dependencies: (dependencies as TemplateDependency[]) ?? current.dependencies ?? [],
-                  tools: toolIds ?? current.tools ?? [],
-                  componentLastModifiedAt: new Date(),
-                  componentLastReadAt: null,
-                  updatedAt: new Date(),
-                })
-                .where(eq(templates.id, id))
-                .run()
-
-              // Check for warnings (non-blocking)
-              const finalFields = fields as TemplateField[]
-              const finalSampleData = (sampleData ?? current.sampleData) as Record<string, unknown>
-              const warnings = validateTemplate(finalFields, finalSampleData, patched)
-              if (warnings.length > 0) {
-                return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true, warnings: warnings.map(w => w.message) }
-              }
-              return { success: true, operationsApplied: operations.length, schemaVersion: newVersion, versionBumped: true }
-            }
+            // Note: Schema changes without affected activities don't need versioning.
+            // The check for affected activities happens earlier (line ~354) and returns
+            // with schemaChangeDetected if there are activities to consider.
+            // If we reach here, either:
+            // 1. Schema hasn't changed, or
+            // 2. Schema changed but no activities use this template
+            // In both cases, we just update the template directly without version bump.
 
             // Build the update payload — only include fields that were provided
             const updatePayload: Record<string, unknown> = {
@@ -847,7 +779,7 @@ export default defineLazyEventHandler(() => {
       model,
       system: systemPrompt,
       messages: compaction.messages,
-      stopWhen: stepCountIs(5),
+      stopWhen: stepCountIs(8),
       tools,
       maxOutputTokens: 16384,
       onFinish: async ({ totalUsage }) => {

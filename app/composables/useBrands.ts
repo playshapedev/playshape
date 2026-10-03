@@ -8,7 +8,12 @@ export type Brand = typeof brands.$inferSelect
 
 export function useBrands() {
   const { data, pending, error, refresh } = useFetch<Brand[]>('/api/brands')
-  const defaultBrand = computed(() => data.value?.find(b => b.isDefault) ?? null)
+  // Use the explicit default brand if one exists, otherwise use the first brand
+  // (brands are sorted by createdAt ascending, so first = oldest)
+  const defaultBrand = computed(() => {
+    if (!data.value?.length) return null
+    return data.value.find(b => b.isDefault) ?? data.value[0] ?? null
+  })
   return { brands: data, defaultBrand, pending, error, refresh }
 }
 

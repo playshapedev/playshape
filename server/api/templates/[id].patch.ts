@@ -33,6 +33,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Template not found' })
   }
 
+  // Default templates are immutable — users must duplicate them to customize
+  if (existing.source === 'default') {
+    throw createError({ statusCode: 403, statusMessage: 'Default templates cannot be edited. Use "Use Template" to create an editable copy.' })
+  }
+
   // Check if inputSchema is being changed structurally
   // If so, reject the direct PATCH and require going through the chat flow
   if (parsed.inputSchema !== undefined) {

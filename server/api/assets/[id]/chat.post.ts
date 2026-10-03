@@ -7,37 +7,12 @@ import { generateImage, getImageModelConfig, useActiveImageModel, DEFAULT_ASPECT
 import { generateAssetImageFilename, saveAssetFile, getAssetImageUrl, readAssetFile } from '~~/server/utils/assetStorage'
 import { readAttachmentFile } from '~~/server/utils/attachmentStorage'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { PLAN_MODE_INSTRUCTION, type ChatMode } from '~~/server/utils/chatMode'
-
-const SYSTEM_PROMPT = `You are an AI assistant helping users create and edit images. Your role is to:
-
-1. Help users describe what kind of image they want to create
-2. Generate images using the generate_image tool when the user's intent is clear
-3. Suggest improvements or variations when asked
-4. Auto-name images with short, descriptive names (2-5 words) based on the content
-
-When generating images:
-- Create detailed, vivid prompts that will produce high-quality images
-- Include style, mood, lighting, composition details when relevant
-- If the user's request is vague, ask clarifying questions before generating
-- After generating, describe what was created and offer to make variations
-
-Using reference images (image-to-image):
-- When the user attaches an image, you can see it directly in their message
-- To use an attached or generated image as reference for new generation, first call get_asset to find the image/attachment ID
-- Then call generate_image with that ID as referenceImageId
-- Reference images are used for: style transfer, creating variations, editing based on the original
-- The most recently uploaded attachment or generated image is often what the user wants to reference
-- If the user says things like "make it more blue" or "create a variation", they likely want you to use the recent image as reference
-
-Viewing images:
-- Use the get_image tool to view images from this asset's history
-- Call get_image without arguments to see the most recent generated image
-- If the user references an earlier image (e.g., "the first one", "the dark version"), first call get_asset to see all images and their prompts, then call get_image with the correct imageId
-
-Always be helpful and creative. If the user wants to try different styles or variations, generate new images with modified prompts.`
+import { useAssetGenerationPrompt } from '~~/server/utils/prompts'
 
 export default defineLazyEventHandler(() => {
   return defineEventHandler(async (event) => {
@@ -45,6 +20,9 @@ export default defineLazyEventHandler(() => {
     if (!id) {
       throw createError({ statusCode: 400, statusMessage: 'Asset ID is required' })
     }
+
+    // Load the system prompt from the prompt file
+    const baseSystemPrompt = await useAssetGenerationPrompt()
 
     const body = await readBody(event)
     const messages: UIMessage[] = body?.messages
@@ -107,8 +85,8 @@ export default defineLazyEventHandler(() => {
 
     // Apply plan mode instruction when in plan mode
     const systemPrompt = mode === 'plan'
-      ? `${SYSTEM_PROMPT}\n\n${PLAN_MODE_INSTRUCTION}`
-      : SYSTEM_PROMPT
+      ? `${baseSystemPrompt}\n\n${PLAN_MODE_INSTRUCTION}`
+      : baseSystemPrompt
 
     // Apply context compaction if needed
     const compaction = await compactContext(messages, systemPrompt, model)
@@ -116,6 +94,8 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       ask_question: askQuestionTool,
+      write_todos: createWriteTodosTool('asset', id),
+      get_todos: createGetTodosTool('asset', id),
       get_asset: tool({
           description: 'Get the current asset details including name, generated images, and user-uploaded attachments. Use this to find image IDs for use with generate_image\'s referenceImageId parameter.',
           inputSchema: z.object({}),

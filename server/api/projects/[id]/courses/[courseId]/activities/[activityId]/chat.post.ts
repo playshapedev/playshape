@@ -5,6 +5,8 @@ import { eq, and, isNotNull, inArray } from 'drizzle-orm'
 import { activities, templates, templateVersions, courseSections, courses, projectLibraries, documentChunks, documents } from '~~/server/database/schema'
 import type { TemplateField } from '~~/server/database/schema'
 import { askQuestionTool } from '~~/server/utils/tools/askQuestion'
+import { createWriteTodosTool } from '~~/server/utils/tools/writeTodos'
+import { createGetTodosTool } from '~~/server/utils/tools/getTodos'
 import { compactContext } from '~~/server/utils/contextCompaction'
 import { recordTokenUsage, incrementEntityTokens } from '~~/server/utils/tokens'
 import { checkHtmlInSampleData } from '~~/server/utils/templateValidation'
@@ -101,6 +103,8 @@ export default defineLazyEventHandler(() => {
     // ─── Read-only tools (available in both Plan and Build modes) ────────────
     const readOnlyTools = {
       ask_question: askQuestionTool,
+      write_todos: createWriteTodosTool('activity', activityId),
+      get_todos: createGetTodosTool('activity', activityId),
 
       get_template: tool({
         description: 'Retrieve the activity template\'s input schema (field definitions), the activity\'s current data, and the component source. Call this to understand what fields need to be filled in. ALWAYS call this before making updates.',

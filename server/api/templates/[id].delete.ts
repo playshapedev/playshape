@@ -15,6 +15,11 @@ export default defineEventHandler((event) => {
     throw createError({ statusCode: 404, statusMessage: 'Template not found' })
   }
 
+  // Default templates are managed by the system and cannot be deleted
+  if (existing.source === 'default') {
+    throw createError({ statusCode: 403, statusMessage: 'Default templates cannot be deleted.' })
+  }
+
   // Get all chat attachments for this template and delete their files
   const attachments = db.select().from(chatAttachments).where(eq(chatAttachments.templateId, id)).all()
   for (const attachment of attachments) {

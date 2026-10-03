@@ -11,10 +11,34 @@ const { setTitle } = useNavbar()
 const templateId = route.params.id as string
 const { template, pending, error, refresh } = useTemplate(templateId)
 
+const isDefault = computed(() => template.value?.source === 'default')
+
 // Set dynamic navbar title from template name
 watch(() => template.value?.name, (name) => {
   if (name) setTitle(name)
 }, { immediate: true })
+
+// ─── Use Template (copy default) ─────────────────────────────────────────────
+
+const copying = ref(false)
+
+async function handleUseTemplate() {
+  if (!template.value || copying.value) return
+  copying.value = true
+  try {
+    const copy = await copyTemplate(template.value.id)
+    toast.add({ title: `Created from "${template.value.name}"`, color: 'success' })
+    await clearNuxtData(getTemplatesKey(template.value.kind))
+    await router.push(`/templates/${copy.id}`)
+  }
+  catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Unknown error'
+    toast.add({ title: 'Failed to create copy', description: message, color: 'error' })
+  }
+  finally {
+    copying.value = false
+  }
+}
 
 // ─── Delete ──────────────────────────────────────────────────────────────────
 
@@ -135,6 +159,7 @@ const selectedBrand = computed(() =>
   allBrands.value?.find(b => b.id === selectedBrandId.value) ?? null,
 )
 
+// Only show brand menu when there are multiple brands to choose from
 const brandMenuItems = computed(() => {
   const brands = (allBrands.value || []).map(b => ({
     label: b.isDefault ? `${b.name} (Default)` : b.name,
@@ -142,14 +167,7 @@ const brandMenuItems = computed(() => {
     onSelect: () => { selectedBrandId.value = b.id },
   }))
   if (!brands.length) return []
-  return [
-    brands,
-    [{
-      label: 'No brand',
-      trailingIcon: selectedBrandId.value === null ? 'i-lucide-check' : undefined,
-      onSelect: () => { selectedBrandId.value = null },
-    }],
-  ]
+  return [brands]
 })
 
 // ─── Interface: Activity Slot Preview ────────────────────────────────────────
@@ -381,8 +399,10 @@ function onPreviewError(error: string | null) {
  */
 async function onTemplateUpdated() {
   await refresh()
-  // Generate thumbnail in the background — don't block the UI
-  generateAndSaveThumbnail()
+  // Wait for Vue to re-render and the preview iframe to update
+  // The iframe needs time to compile and render the new component
+  await nextTick()
+  setTimeout(() => generateAndSaveThumbnail(), 500)
 }
 
 async function generateAndSaveThumbnail() {
@@ -403,38 +423,50 @@ async function generateAndSaveThumbnail() {
 <template>
   <!-- Navbar actions -->
   <Teleport defer to="#navbar-actions">
-    <UTooltip text="Swap layout">
+    <!-- Default template: show "Use Template" button only -->
+    <template v-if="isDefault">
       <UButton
-        :icon="chatPosition === 'left' ? 'i-lucide-panel-right-open' : 'i-lucide-panel-left-open'"
+        label="Use This Template"
+        icon="i-lucide-copy"
+        :loading="copying"
+        @click="handleUseTemplate"
+      />
+    </template>
+    <!-- User template: full editor controls -->
+    <template v-else>
+      <UTooltip text="Swap layout">
+        <UButton
+          :icon="chatPosition === 'left' ? 'i-lucide-panel-right-open' : 'i-lucide-panel-left-open'"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          @click="toggleChatPosition"
+        />
+      </UTooltip>
+      <UTooltip text="Clear chat">
+        <UButton
+          icon="i-lucide-message-square-x"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          @click="showClearChatModal = true"
+        />
+      </UTooltip>
+      <UButton
+        icon="i-lucide-pencil"
         color="neutral"
         variant="ghost"
         size="sm"
-        @click="toggleChatPosition"
+        @click="openEdit"
       />
-    </UTooltip>
-    <UTooltip text="Clear chat">
       <UButton
-        icon="i-lucide-message-square-x"
-        color="neutral"
+        icon="i-lucide-trash-2"
+        color="error"
         variant="ghost"
         size="sm"
-        @click="showClearChatModal = true"
+        @click="showDeleteModal = true"
       />
-    </UTooltip>
-    <UButton
-      icon="i-lucide-pencil"
-      color="neutral"
-      variant="ghost"
-      size="sm"
-      @click="openEdit"
-    />
-    <UButton
-      icon="i-lucide-trash-2"
-      color="error"
-      variant="ghost"
-      size="sm"
-      @click="showDeleteModal = true"
-    />
+    </template>
   </Teleport>
 
   <!-- Loading (initial load only — never unmount the editor for a refresh) -->
@@ -452,7 +484,39 @@ async function generateAndSaveThumbnail() {
     <UButton label="Back to Templates" to="/templates" />
   </EmptyState>
 
-  <!-- Editor -->
+  <!-- Default template: read-only preview -->
+  <div
+    v-else-if="template && isDefault"
+    class="flex flex-col h-full overflow-hidden"
+  >
+    <!-- Info bar -->
+    <div class="shrink-0 border-b border-default bg-elevated/50 px-4 py-3 flex items-center justify-between gap-4">
+      <div class="flex items-center gap-3 min-w-0">
+        <UBadge label="Default Template" color="primary" variant="subtle" size="sm" />
+        <p v-if="template.description" class="text-sm text-muted truncate">{{ template.description }}</p>
+      </div>
+      <UButton
+        label="Use This Template"
+        icon="i-lucide-copy"
+        :loading="copying"
+        @click="handleUseTemplate"
+      />
+    </div>
+
+    <!-- Full-size preview -->
+    <div class="flex-1 min-h-0">
+      <TemplatePreview
+        :component-source="template.component || ''"
+        :data="(template.sampleData as Record<string, unknown>) || {}"
+        :input-schema="(template.inputSchema as any[]) || []"
+        :dependencies="(template.dependencies as any[]) || []"
+        :tools="(template.tools as string[]) || []"
+        :brand="selectedBrand"
+      />
+    </div>
+  </div>
+
+  <!-- Editor (user templates only) -->
   <div
     v-else-if="template"
     ref="containerRef"
@@ -505,14 +569,14 @@ async function generateAndSaveThumbnail() {
         @error="onPreviewError"
       >
         <template #header-actions>
-          <!-- Brand selector -->
-          <UDropdownMenu v-if="allBrands?.length" :items="brandMenuItems" size="xs">
-            <UTooltip :text="selectedBrand ? selectedBrand.name : 'Apply brand'">
+          <!-- Brand selector (only show when multiple brands exist) -->
+          <UDropdownMenu v-if="allBrands && allBrands.length > 1" :items="brandMenuItems" size="xs">
+            <UTooltip :text="selectedBrand?.name || 'Select brand'">
               <UButton
                 icon="i-lucide-palette"
                 size="xs"
                 variant="ghost"
-                :color="selectedBrand ? 'primary' : 'neutral'"
+                color="primary"
               />
             </UTooltip>
           </UDropdownMenu>

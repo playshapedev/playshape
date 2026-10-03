@@ -11,6 +11,7 @@ const PROMPT_FILES = [
   'design-system',
   'course-api',
   'template-core',
+  'task-tracking',
   'activity',
   'interface',
   'activity-editor',
@@ -52,6 +53,7 @@ export async function useSystemPrompts() {
     p['design-system'],
     p['course-api'],
     p['template-core'],
+    p['task-tracking'],
   ].join('\n\n')
 
   return {
@@ -73,8 +75,9 @@ export async function useActivityEditorPrompt(): Promise<string> {
   const content = await storage.getItem<string>('activity-editor.md')
   if (!content) throw new Error('Prompt file not found in server assets: activity-editor.md')
 
-  activityEditorCache = content
-  return content
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  activityEditorCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return activityEditorCache
 }
 
 /**
@@ -89,6 +92,53 @@ export async function useDocumentGenerationPrompt(): Promise<string> {
   const content = await storage.getItem<string>('document-generation.md')
   if (!content) throw new Error('Prompt file not found in server assets: document-generation.md')
 
-  documentGenerationCache = content
-  return content
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  documentGenerationCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return documentGenerationCache
+}
+
+/**
+ * Load the asset generation system prompt (for AI image generation conversations).
+ */
+let assetGenerationCache: string | null = null
+
+export async function useAssetGenerationPrompt(): Promise<string> {
+  if (assetGenerationCache) return assetGenerationCache
+
+  const storage = useStorage('assets:prompts')
+  const content = await storage.getItem<string>('asset-generation.md')
+  if (!content) throw new Error('Prompt file not found in server assets: asset-generation.md')
+
+  const taskTracking = await storage.getItem<string>('task-tracking.md')
+  assetGenerationCache = taskTracking ? `${content}\n\n${taskTracking}` : content
+  return assetGenerationCache
+}
+
+/**
+ * Load the content cleanup prompts (for cleaning extracted document text).
+ * Returns separate prompts for chunk cleanup and metadata generation.
+ */
+let contentCleanupCache: { chunkCleanup: string; metadata: string } | null = null
+
+export async function useContentCleanupPrompts(): Promise<{ chunkCleanup: string; metadata: string }> {
+  if (contentCleanupCache) return contentCleanupCache
+
+  const storage = useStorage('assets:prompts')
+  const content = await storage.getItem<string>('content-cleanup.md')
+  if (!content) throw new Error('Prompt file not found in server assets: content-cleanup.md')
+
+  // Split the prompt into its two sections
+  const chunkCleanupMatch = content.match(/## Chunk Cleanup\n\n([\s\S]*?)(?=\n## Metadata Generation)/)
+  const metadataMatch = content.match(/## Metadata Generation\n\n([\s\S]*)$/)
+
+  if (!chunkCleanupMatch || !metadataMatch) {
+    throw new Error('content-cleanup.md has unexpected structure')
+  }
+
+  contentCleanupCache = {
+    chunkCleanup: chunkCleanupMatch[1]!.trim(),
+    metadata: metadataMatch[1]!.trim(),
+  }
+
+  return contentCleanupCache
 }

@@ -1,6 +1,8 @@
 ## Design System
 
-The preview iframe loads **Tailwind CSS v3 via CDN**, so the full standard Tailwind utility class library is available. In addition, the iframe's Tailwind config extends with custom design tokens (CSS custom properties) that map to semantic utilities for colors, backgrounds, borders, and border radius. Using these tokens ensures components look consistent with the host app's theme and respond correctly to light/dark mode and brand overrides.
+**IMPORTANT: Always use Nuxt UI components as your first choice.** The preview iframe has 100+ pre-built Nuxt UI components (`<UButton>`, `<UCard>`, `<UInput>`, `<UAlert>`, etc.) that are accessible, theme-aware, and require far less code than raw HTML. Only fall back to raw HTML + Tailwind when Nuxt UI doesn't have a component for your specific need.
+
+The preview iframe also loads **Tailwind CSS v3 via CDN** for custom styling. The iframe's Tailwind config extends with custom design tokens (CSS custom properties) that map to semantic utilities for colors, backgrounds, borders, and border radius.
 
 ### Standard Tailwind (all available)
 
@@ -42,92 +44,144 @@ These are custom utility classes added via the iframe's Tailwind config. They re
 
 **Border radius:** `rounded-ui` for the theme's standard radius. Or use `var(--ui-radius)` directly.
 
+### Dark Mode (CRITICAL)
+
+**Every template MUST work in both light and dark mode.** Users can toggle between modes, and exported activities may be viewed in either.
+
+**DO NOT USE these — they break in dark mode:**
+- `text-black`, `text-white`, `text-gray-900`, `text-gray-100` for body text
+- `bg-white`, `bg-gray-50`, `bg-gray-900` for backgrounds
+- `border-gray-200`, `border-gray-700` for borders
+
+**USE these instead — they adapt automatically:**
+- Text: `text-default`, `text-muted`, `text-dimmed`, `text-highlighted`
+- Backgrounds: `bg-default`, `bg-muted`, `bg-elevated`, `bg-accented`
+- Borders: `border-default`, `border-muted`, `border-accented`
+
+Nuxt UI components handle dark mode automatically — this is another reason to always use them.
+
 ### When to use tokens vs standard Tailwind
 
-- **Structural UI** (cards, buttons, inputs, nav, text, headings, borders, page backgrounds) → Use design tokens (`text-default`, `bg-elevated`, `border-default`, `bg-primary`, `text-highlighted`, etc.) so the component adapts to themes and brands.
-- **Decorative/fixed colors** (illustrations, charts, status badges with specific colors, gradients, colored indicators, colored icons) → Use standard Tailwind colors (`text-green-500`, `bg-red-50`, `bg-gradient-to-r from-blue-500 to-purple-600`, etc.).
-- **Dark mode** → Semantic tokens handle dark mode automatically. For anything using standard Tailwind colors, add `dark:` variants manually (e.g., `bg-white dark:bg-gray-900`).
+- **Structural UI** (cards, buttons, inputs, nav, text, headings, borders, page backgrounds) → Use design tokens (`text-default`, `bg-elevated`, `border-default`, `bg-primary`, `text-highlighted`, etc.) so the component adapts to themes and dark mode.
+- **Decorative/fixed colors** (illustrations, charts, status badges with specific colors, gradients, colored indicators, colored icons) → Use standard Tailwind colors (`text-green-500`, `bg-red-50`, `bg-gradient-to-r from-blue-500 to-purple-600`, etc.). These are fine because they're meant to be a specific color regardless of mode.
+- **If you must use hardcoded colors for structural elements** → Add `dark:` variants manually (e.g., `bg-white dark:bg-neutral-900`), but prefer semantic tokens instead.
 
-### Common UI patterns
+### Nuxt UI vs Raw HTML comparison
 
-Use these Tailwind patterns to build clean, consistent interfaces:
+**Always prefer the Nuxt UI version:**
 
-**Card:**
+| Need | Use Nuxt UI | NOT raw HTML |
+|------|-------------|--------------|
+| Button | `<UButton>Next</UButton>` | `<button class="inline-flex items-center...">` |
+| Card | `<UCard><template #header>...</UCard>` | `<div class="rounded-ui border...">` |
+| Input | `<UInput v-model="answer" />` | `<input class="w-full px-3 py-2...">` |
+| Alert | `<UAlert title="Correct!" color="success" />` | `<div class="flex gap-3 p-4 rounded-ui...">` |
+| Badge | `<UBadge>Score: 5</UBadge>` | `<span class="inline-flex px-2 py-0.5...">` |
+| Progress | `<UProgress :value="75" />` | `<div class="w-full bg-neutral-200...">` |
+| Tabs | `<UTabs :items="tabs" />` | `<div class="flex border-b...">` |
+| Checkbox | `<UCheckbox v-model="selected" />` | `<input type="checkbox" class="...">` |
+
+### Fallback patterns (only when Nuxt UI can't do it)
+
+These raw HTML patterns are for **custom visualizations and game mechanics only** — never for standard UI:
+
+**Custom container (when UCard doesn't fit):**
 ```html
-<div class="rounded-ui border border-default bg-default p-4 sm:p-6 space-y-3">
-  <div class="border-b border-default pb-3 font-semibold text-highlighted">Header</div>
-  <div class="text-default">Body content</div>
-  <div class="border-t border-default pt-3 text-muted text-sm">Footer</div>
-</div>
+<div class="rounded-ui border border-default bg-default p-4 space-y-3">...</div>
 ```
 
-**Button (solid):**
-```html
-<button class="inline-flex items-center gap-2 px-4 py-2 rounded-ui bg-primary text-white text-sm font-medium hover:opacity-90 transition">Label</button>
-```
-
-**Button (outline):**
-```html
-<button class="inline-flex items-center gap-2 px-4 py-2 rounded-ui border border-default text-default text-sm font-medium hover:bg-accented transition">Label</button>
-```
-
-**Badge:**
-```html
-<span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-700">Badge</span>
-```
-
-**Input:**
-```html
-<input class="w-full px-3 py-2 rounded-ui border border-default bg-default text-default placeholder:text-dimmed text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition" />
-```
-
-**Alert/Callout:**
-```html
-<div class="flex gap-3 p-4 rounded-ui border border-primary/20 bg-primary-50 text-sm">
-  <span class="text-primary">ℹ</span>
-  <div class="text-default">Alert message here</div>
-</div>
-```
-
-**Separator:**
+**Separator (between custom elements):**
 ```html
 <div class="border-t border-default my-4"></div>
 ```
 
-**Tab bar:**
-```html
-<div class="flex border-b border-default">
-  <button class="px-4 py-2 text-sm font-medium border-b-2 border-primary text-primary">Active</button>
-  <button class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-muted hover:text-default transition">Inactive</button>
-</div>
-```
-
-**Progress bar:**
-```html
-<div class="w-full bg-neutral-200 dark:bg-neutral-700 rounded-full h-2">
-  <div class="bg-primary h-2 rounded-full transition-all duration-300" :style="{ width: progress + '%' }"></div>
-</div>
-```
-
-**Tooltip (CSS-only):**
+**CSS-only tooltip (for lightweight hover hints):**
 ```html
 <div class="relative group">
   <span>Hover me</span>
-  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-inverted text-inverted rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap">Tooltip text</div>
+  <div class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs bg-inverted text-inverted rounded opacity-0 group-hover:opacity-100 transition pointer-events-none whitespace-nowrap">Tooltip</div>
 </div>
 ```
 
-### `get_reference` tool
+## Nuxt UI Components (USE THESE FIRST)
 
-You have a `get_reference` tool that fetches detailed UI component and design system documentation. **Call this before building complex interfaces** (forms, dashboards, data displays, chat UIs) to get the full API reference for relevant components and layout patterns. Topics available:
-- `overview` — Full component library overview with examples
-- `components` — All 125+ components organized by category with props and slots
-- `theming` — Color system, CSS variables, customization patterns
-- `composables` — Toast notifications, programmatic overlays, keyboard shortcuts
-- `layout-dashboard` — Admin panel with sidebar, panels, navbar patterns
-- `layout-page` — Landing pages, marketing pages, blog layouts
-- `layout-chat` — AI chat interfaces with messages, prompt, model selector
-- `layout-docs` — Documentation sites with navigation and TOC
-- `layout-editor` — Rich text editor with toolbars
+**You MUST use Nuxt UI components whenever possible.** They are pre-built, accessible, theme-aware, and require far less code. Components are dynamically loaded based on what you use — no imports needed.
 
-Note: The reference docs describe Nuxt UI components (`<UButton>`, `<UCard>`, etc.) which are NOT available in the preview iframe. Use the docs to understand the **visual patterns, prop structures, and layout compositions**, then implement them using plain HTML + Tailwind CSS with the design tokens above. Do NOT generate `<UButton>`, `<UCard>`, or any `<U*>` components — they will not render.
+### Why Nuxt UI is required
+
+1. **Accessibility** — Built-in ARIA attributes, keyboard navigation, focus management
+2. **Consistency** — Matches the app's design language automatically
+3. **Less code** — A `<UButton>` replaces 10+ Tailwind classes
+4. **Theme-aware** — Responds to light/dark mode and brand colors
+5. **Tested** — Production-ready components vs. hand-rolled HTML
+
+### Using Nuxt UI
+
+Simply use the components in your template:
+
+```vue
+<template>
+  <div class="space-y-4">
+    <UCard>
+      <template #header>
+        <h3 class="font-semibold">Question</h3>
+      </template>
+      <p>What is the capital of France?</p>
+      <template #footer>
+        <div class="flex gap-2">
+          <UButton @click="checkAnswer('Paris')">Paris</UButton>
+          <UButton variant="outline" @click="checkAnswer('London')">London</UButton>
+        </div>
+      </template>
+    </UCard>
+    
+    <UAlert v-if="feedback" :color="isCorrect ? 'success' : 'error'" :title="feedback" />
+  </div>
+</template>
+```
+
+### Common components for learning activities
+
+| Component | Use case |
+|-----------|----------|
+| `<UButton>` | Actions, choices, navigation |
+| `<UCard>` | Content containers, question cards |
+| `<UAlert>` | Feedback messages, hints, warnings |
+| `<UBadge>` | Status indicators, scores, labels |
+| `<UTabs>` | Multi-step activities, content sections |
+| `<UAccordion>` | Expandable content, FAQs |
+| `<UProgress>` | Progress tracking, scores |
+| `<UInput>` | Text input, fill-in-the-blank |
+| `<UTextarea>` | Long-form responses |
+| `<UCheckbox>` | Multiple choice (multiple select) |
+| `<URadioGroup>` | Multiple choice (single select) |
+| `<UIcon>` | Icons via `name="i-lucide-check"` |
+
+### Icons
+
+Use Iconify icons with the `i-{collection}-{name}` format:
+
+```vue
+<UIcon name="i-lucide-check" class="size-5 text-green-500" />
+<UButton icon="i-lucide-arrow-right">Next</UButton>
+<UAlert icon="i-lucide-info" title="Hint">Think about geography.</UAlert>
+```
+
+Browse icons at [icones.js.org](https://icones.js.org). The `lucide` collection is recommended.
+
+### Learning more
+
+Load the `nuxt-ui` skill for comprehensive documentation:
+- Component props, slots, and variants
+- Form validation with Zod
+- Theming and customization
+- Layout patterns (dashboard, chat, etc.)
+
+### When raw HTML + Tailwind is acceptable
+
+Only use raw HTML + Tailwind in these specific cases:
+- **Custom visualizations** — Canvas, SVG charts, complex animations that Nuxt UI can't do
+- **Game mechanics** — Drag-and-drop zones, spatial interactions, custom hit detection
+- **Unique layouts** — When no Nuxt UI layout component fits and you need a one-off structure
+
+**Never use raw HTML for:** buttons, cards, inputs, alerts, badges, tabs, accordions, modals, forms, progress bars, or any standard UI element. Nuxt UI has components for all of these.

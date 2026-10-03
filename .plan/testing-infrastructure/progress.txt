@@ -1,0 +1,45 @@
+[2026-03-21] Completed cfg-001: Vitest is installed and configured for the project
+
+Actions taken:
+- Installed vitest@4.1.0 as dev dependency
+- Installed @nuxt/test-utils@4.0.0 as dev dependency  
+- Installed @vitest/coverage-v8@4.1.0 as dev dependency
+- Installed happy-dom@20.8.4 as dev dependency
+- Created vitest.config.ts using defineVitestConfig from @nuxt/test-utils/config
+- Configured test environment as 'happy-dom'
+- Configured coverage with v8 provider and 0% thresholds
+- Set include/exclude patterns for spec files
+- Verified vitest --version works (4.1.0)
+- TypeScript config validated successfully
+
+No blockers. Ready for cfg-002.
+
+[2026-03-21] Completed cfg-002: @nuxt/test-utils is properly configured
+
+Actions taken:
+- Verified @nuxt/test-utils v4.0.0 is installed in devDependencies
+- Added '@nuxt/test-utils' to modules array in nuxt.config.ts
+- Confirmed vitest.config.ts uses defineVitestConfig from @nuxt/test-utils/config
+- Created tests/setup.ts with Nuxt test environment setup
+- Added setupFiles: ['./tests/setup.ts'] to vitest.config.ts
+- Ran nuxt prepare to regenerate types with new module
+- Ran typecheck - all passed
+- Ran vitest to verify configuration loads correctly
+
+Note: @nuxt/test-utils v4 doesn't require explicit nuxt-shim configuration - the module and setup file handle it automatically.
+No blockers. Ready for cfg-003.
+
+[2026-03-21] Completed cfg-003: Test scripts added to package.json
+
+Actions taken:
+- Added 'test' script: vitest (runs vitest in watch mode)
+- Added 'test:unit' script: vitest --run (runs unit tests without watch)
+- Added 'test:ui' script: vitest --ui (opens Vitest UI for visual debugging)
+- Added 'test:coverage' script: vitest --coverage (runs with coverage)
+- Added 'test:ci' script: vitest --coverage --run --reporter=verbose (for CI)
+- Installed @vitest/ui@4.1.0 as dev dependency for the UI feature
+- Verified all scripts execute successfully (exit 1 expected as no tests exist yet)
+- Ran pnpm install to update dependencies
+- Ran typecheck - all passed
+
+All test scripts are working correctly. Ready for dir-001.

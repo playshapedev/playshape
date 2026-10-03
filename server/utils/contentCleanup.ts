@@ -1,41 +1,7 @@
 import { z } from 'zod'
 import { generateStructuredOutput } from './structuredOutput'
 import { getContentCleanupEnabled } from './settings'
-
-// Prompt for cleaning text chunks (no title/summary)
-const CHUNK_CLEANUP_PROMPT = `You are a document cleanup assistant. Clean up the provided text chunk by removing artifacts.
-
-## Remove or fix:
-- Page numbers (e.g., "Page 1 of 10", "- 1 -", standalone numbers at paragraph breaks)
-- Headers and footers that repeat on every page
-- Copyright notices and legal boilerplate
-- Table of contents entries
-- Running headers/footers
-- Watermarks or draft notices
-- Excessive whitespace or blank lines
-- Broken words from line wraps (rejoin hy-phenated words)
-- OCR artifacts and garbled text
-
-## Preserve:
-- All actual content, paragraphs, and sections
-- Meaningful headings and subheadings
-- Lists, bullet points, and numbered items
-- Code blocks or technical content
-- Quotes and citations`
-
-// Prompt for generating title and summary from cleaned text
-const METADATA_PROMPT = `Based on the document text provided, generate a title and summary.
-
-## Title Rules:
-- If the current title is a filename (e.g., "document_final_v2", "scan001") or too generic, suggest a better one
-- Title should be concise (2-8 words), descriptive, and in title case
-- If the current title is already good, return it unchanged
-
-## Summary Rules:
-- Write 2-4 sentences (50-150 words)
-- Capture the main topic, purpose, and key points
-- Help someone decide if they need to read the full document
-- Do NOT start with "This document..."`
+import { useContentCleanupPrompts } from './prompts'
 
 const chunkCleanupSchema = z.object({
   cleanedText: z.string().describe('The cleaned text chunk with artifacts removed'),
@@ -128,6 +94,9 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
   }
 
   try {
+    // Load prompts from file
+    const prompts = await useContentCleanupPrompts()
+
     // Split text into chunks
     const chunks = chunkText(text)
     console.log(`[contentCleanup] Processing ${chunks.length} chunk(s)`)
@@ -138,7 +107,7 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
       console.log(`[contentCleanup] Cleaning chunk ${i + 1}/${chunks.length}`)
       const result = await generateStructuredOutput({
         schema: chunkCleanupSchema,
-        system: CHUNK_CLEANUP_PROMPT,
+        system: prompts.chunkCleanup,
         prompt: `Text chunk ${i + 1} of ${chunks.length}:\n\n${chunks[i]}`,
       })
       cleanedChunks.push(result.cleanedText)
@@ -150,15 +119,15 @@ export async function cleanupContent(text: string, currentTitle?: string): Promi
     // Generate title and summary from the cleaned text
     // Use first ~8k chars for context (should be enough to understand the doc)
     const contextForMetadata = cleanedText.slice(0, 8000)
-    const metadataPrompt = currentTitle
+    const userPrompt = currentTitle
       ? `Current title: "${currentTitle}"\n\nDocument text:\n${contextForMetadata}`
       : `Document text:\n${contextForMetadata}`
 
     console.log(`[contentCleanup] Generating title and summary`)
     const metadata = await generateStructuredOutput({
       schema: metadataSchema,
-      system: METADATA_PROMPT,
-      prompt: metadataPrompt,
+      system: prompts.metadata,
+      prompt: userPrompt,
     })
 
     // Only return suggested title if it's different from the current one

@@ -1,0 +1,144 @@
+{
+  "feature": "testing-strategy",
+  "createdAt": "2026-03-22T13:00:00Z",
+  "requirements": [
+    {
+      "id": "setup-001",
+      "category": "technical",
+      "description": "Configure Vitest with proper environments for 4-tier testing",
+      "steps": [
+        "Review current vitest.config.ts and identify needed changes",
+        "Configure Vitest projects for unit vs integration separation",
+        "Set up 'node' environment for Tier 2 (logic) tests",
+        "Configure 'nuxt' environment for Tier 3 (integration) tests",
+        "Verify tests can run with 'vitest --project unit' and 'vitest --project integration'",
+        "Update package.json scripts to match new structure"
+      ],
+      "passes": true
+    },
+    {
+      "id": "logic-001",
+      "category": "testing",
+      "description": "Extract and test navigation resolver logic",
+      "steps": [
+        "Create lib/navigation/resolver.ts from app/utils/navigation.ts logic",
+        "Extract resolveNavItem() as pure function",
+        "Write lib/navigation/resolver.test.ts with 3-5 test cases",
+        "Test matching root paths, child paths, and tab resolution",
+        "Verify tests run with 'vitest --project unit'",
+        "Ensure no Nuxt imports or DOM dependencies in logic tests"
+      ],
+      "passes": true
+    },
+    {
+      "id": "logic-002",
+      "category": "testing",
+      "description": "Test courseApi utilities if business logic exists",
+      "steps": [
+        "Review app/utils/courseApi/ directory for pure functions",
+        "Identify functions with conditional logic or calculations",
+        "Extract any business logic to lib/ directory",
+        "Write co-located tests for extracted functions",
+        "Verify 2-3 key utility functions have passing tests"
+      ],
+      "passes": true
+    },
+    {
+      "id": "integration-001",
+      "category": "testing",
+      "description": "Test project CRUD endpoints",
+      "steps": [
+        "Create tests/api/projects.test.ts for integration tests",
+        "Test GET /api/projects returns array of projects",
+        "Test POST /api/projects creates project with valid data",
+        "Test POST /api/projects returns 400 for invalid data",
+        "Test GET /api/projects/:id returns single project",
+        "Test PATCH /api/projects/:id updates project",
+        "Test DELETE /api/projects/:id removes project",
+        "Verify all tests pass with 'vitest --project integration'"
+      ],
+      "passes": true
+    },
+    {
+      "id": "integration-002",
+      "category": "testing",
+      "description": "Test health check endpoint",
+      "steps": [
+        "Create tests/api/health.test.ts",
+        "Test GET /api/health returns status and platform info",
+        "Verify response includes 'ok' or 'degraded' status",
+        "Check response has timestamp and database status",
+        "Test passes without external dependencies"
+      ],
+      "passes": true
+    },
+    {
+      "id": "integration-003",
+      "category": "testing",
+      "description": "Test database connectivity in integration layer",
+      "steps": [
+        "Create tests/api/setup that configures test database",
+        "Set up in-memory SQLite database for tests",
+        "Create test fixture for sample project data",
+        "Verify database tests use isolated transactions",
+        "Test that useDb() composable works in test context"
+      ],
+      "passes": true
+    },
+    {
+      "id": "pattern-001",
+      "category": "technical",
+      "description": "Establish test organization conventions",
+      "steps": [
+        "Create lib/ directory at root for pure logic",
+        "Move navigation resolver and other logic to lib/",
+        "Create tests/api/ directory for integration tests",
+        "Create tests/fixtures/ for shared test data",
+        "Document pattern: Tier 2 co-located, Tier 3 in tests/api/",
+        "Update AGENTS.md with testing conventions section"
+      ],
+      "passes": true
+    },
+    {
+      "id": "pattern-002",
+      "category": "technical",
+      "description": "Create example composable test for useProjects",
+      "steps": [
+        "Create app/composables/useProjects.spec.ts as example",
+        "Test composable initialization and state",
+        "Use registerEndpoint() to mock API calls",
+        "Verify composable calls correct endpoints",
+        "Show pattern for testing other composables",
+        "Keep test focused on composable behavior, not component rendering"
+      ],
+      "passes": true
+    },
+    {
+      "id": "docs-001",
+      "category": "functional",
+      "description": "Document testing strategy and patterns",
+      "steps": [
+        "Create TESTING.md at project root",
+        "Explain 4-tier testing strategy briefly",
+        "Document when to write Tier 2 vs Tier 3 tests",
+        "Provide examples of each test type",
+        "Include commands to run different test tiers",
+        "Reference nuxt-testing skill for detailed guidance"
+      ],
+      "passes": true
+    },
+    {
+      "id": "validation-001",
+      "category": "testing",
+      "description": "Validate tests run successfully in CI configuration",
+      "steps": [
+        "Ensure 'pnpm run test' runs all test tiers",
+        "Verify 'pnpm run test:unit' runs only Tier 2 tests",
+        "Confirm tests pass locally without external services",
+        "Check that tests don't require real LLM or database connections",
+        "Document any environment setup required for tests"
+      ],
+      "passes": true
+    }
+  ]
+}

@@ -36,7 +36,7 @@ Playshape is a cross-platform app that empowers learning experience designers (L
 | Images | **Nuxt Image** | Optimized image handling, lazy loading, responsive sizing for content previews and activity assets |
 | Security | **Nuxt Security** | CSP headers, rate limiting, XSS protection. Configures security defaults for the Electron renderer |
 | Linting | **Nuxt ESLint** | Project-aware ESLint config with Vue/Nuxt rules. Flat config format |
-| Testing | **Nuxt Test Utils** | Component and integration testing with Vitest. Use for composable and page-level tests |
+| Testing | **Nuxt Test Utils** | Component and integration testing with Vitest. See `nuxt-testing` skill for detailed testing strategy |
 | Integration | **Local Nuxt module** (`modules/electron.ts`) + **vite-plugin-electron** | Custom module bridges Nuxt and Electron. Uses `vite-plugin-electron` for building main/preload entries and managing the Electron process lifecycle |
 
 ### Data Layer
@@ -205,6 +205,48 @@ Updates are distributed through the App Store and Play Store. Migrations run on 
 - Migration errors: Fatal — show error dialog and prevent app from loading with corrupt state.
 - Validation errors: Log the Zod error details, show user-friendly message in the UI.
 
+### Testing Conventions
+
+We follow a **4-tier testing strategy** to balance coverage with maintenance burden:
+
+1. **Tier 1: Static Analysis** — TypeScript strict mode + ESLint (already configured)
+2. **Tier 2: Logic Tests** — Pure functions in `lib/` tested with Vitest (node environment)
+3. **Tier 3: Integration Tests** — API routes tested with `@nuxt/test-utils` (nuxt environment)
+4. **Tier 4: E2E Tests** — Full workflows (reserved for critical paths when they stabilize)
+
+#### Test Organization
+
+- **Tier 2 (Logic)**: Co-located with source files in `lib/`
+  - Example: `lib/navigation/resolver.ts` → `lib/navigation/resolver.test.ts`
+  - Run with: `npm run test:unit`
+  - Environment: `vitest.unit.config.ts` with `environment: 'node'`
+  - Must have zero Nuxt/Vue imports, zero DOM dependencies
+
+- **Tier 3 (Integration)**: Separate directory at `tests/api/`
+  - Example: `tests/api/projects.test.ts`
+  - Run with: `npm run test:integration`
+  - Environment: `vitest.integration.config.ts` with `environment: 'nuxt'`
+  - Use `registerEndpoint()` to mock API calls, `setup()` for test database
+
+- **Shared Fixtures**: `tests/fixtures/` for reusable test data
+  - Example: `tests/fixtures/projects.ts` with sample project data
+
+#### What Not to Test
+
+- **Components that just render props** — Trust the framework
+- **Simple fetch wrappers** — TypeScript gives us confidence
+- **Framework internals** — Nuxt/Vue have their own test suites
+- **Trivial computed properties** — Vue's reactivity is well-tested
+
+#### Testing Patterns
+
+- **Pure functions first**: Extract business logic to `lib/` for easy testing
+- **Test observable output, not implementation**: Check what functions return, not how they work internally
+- **Mock at boundaries**: Mock API calls, not the composables that make them
+- **Database isolation**: Each test runs with clean data via `tests/setup.ts`
+
+See `.agents/skills/nuxt-testing/SKILL.md` for detailed testing guidance.
+
 ---
 
 ## Activity Generation Pipeline
@@ -273,11 +315,20 @@ The chat uses AI SDK `streamText()` with four tools:
 - **`get_reference`** — Fetches UI component and design system documentation from `.agents/skills/nuxt-ui/references/`. The LLM calls this before building complex interfaces to understand component patterns and design conventions. Topics: `overview`, `components`, `theming`, `composables`, `layout-dashboard`, `layout-page`, `layout-chat`, `layout-docs`, `layout-editor`. In production (Electron), reference files are bundled via `extraResources` and resolved via `PLAYSHAPE_RESOURCES_PATH`.
 - **`update_template`** — Provides the template output (input schema + Vue SFC). Automatically persists to the database and updates the preview.
 
+### Nuxt UI Components in Templates
+
+The preview iframe supports **real Nuxt UI components** (`<UButton>`, `<UCard>`, `<UInput>`, etc.). Components are pre-built at development time via `pnpm run build:nuxt-ui` and dynamically loaded at runtime based on what the template uses. The LLM should prefer Nuxt UI components over raw HTML + Tailwind for better accessibility and consistency.
+
+The build script (`scripts/build-nuxt-ui.ts`) uses Vite + `@nuxt/ui/vite` to compile all ~115 components into:
+- `resources/nuxt-ui/shared.js` — Common runtime dependencies (~1MB)
+- `resources/nuxt-ui/components/*.js` — Individual component modules
+- `resources/nuxt-ui/manifest.json` — Component dependency graph
+
+When a template is rendered, `TemplatePreview.vue` parses the SFC to detect which `<U*>` components and icons are used, then dynamically imports only those modules and registers them globally before mounting.
+
 ### Design Token System
 
 The preview iframe includes a design token system that mirrors Nuxt UI's CSS custom properties. This gives the LLM a vocabulary of semantic variables (`--ui-primary`, `--ui-text-muted`, `--ui-bg-elevated`, `--ui-radius`, etc.) and Tailwind utility extensions (`text-default`, `bg-elevated`, `border-default`, `rounded-ui`, `bg-primary`, etc.) so generated components look consistent with the app's design language.
-
-Nuxt UI components (`<UButton>`, `<UCard>`, etc.) do NOT run in the iframe — they require Nuxt's build-time module system. Instead, the LLM generates plain HTML + Tailwind CSS that follows Nuxt UI's visual patterns. The `get_reference` tool provides documentation about those patterns on demand.
 
 Tokens default to the app's current theme (playshape primary color, slate neutral). The token structure is designed to be user-configurable in the future — the CSS variables can be driven by a theme object passed as a prop to `TemplatePreview.vue`.
 

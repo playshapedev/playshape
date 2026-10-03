@@ -6,12 +6,28 @@ interface ElectronAPI {
   inspectElement: (x: number, y: number) => void;
   setTrafficLightsVisible: (visible: boolean) => void;
   generateThumbnail: (args: {
-    srcdoc: string;
-    sfc: string;
-    data: Record<string, unknown>;
-    depMappings: Record<string, string>;
-    brandCSS?: string;
-    brandFontLink?: string;
+    url: string;
+    initPayload: {
+      dependencies: Array<{ name: string; url: string; global: string }>;
+      tools: Array<{ id: string; headHtml: string; setupJs: string }>;
+      dark: boolean;
+    };
+    updatePayload: {
+      type: 'update';
+      sfc: string;
+      data: Record<string, unknown>;
+      depMappings: Record<string, string>;
+      nuxtUI?: {
+        components: string[];
+        icons: Array<{ id: string; collection: string; name: string }>;
+        optionalChunks?: string[];
+      } | null;
+      slotContent?: unknown;
+    };
+    brandPayload?: {
+      css: string;
+      fontLink?: string;
+    };
   }) => Promise<string>;
 }
 
