@@ -1,14 +1,12 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
-import { setup, $fetch } from '@nuxt/test-utils'
+import { describe, it, expect } from 'vitest'
+import { setup, $fetch } from '@nuxt/test-utils/e2e'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-describe('Database Connectivity', () => {
-  beforeAll(async () => {
-    await setup({
-      server: true,
-    })
-  }, 60000)
+describe('Database Connectivity', async () => {
+  await setup({
+    server: true,
+  })
 
   describe('Test Database Setup', () => {
     it('should have test database directory configured', async () => {

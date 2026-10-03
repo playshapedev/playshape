@@ -36,6 +36,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Testing
+coverage/
+
 # OpenCode tooling
 .opencode/node_modules/
 .opencode/bun.lock

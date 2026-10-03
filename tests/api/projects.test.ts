@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import { setup, $fetch } from '@nuxt/test-utils'
+import { describe, it, expect } from 'vitest'
+import { $fetch, setup } from '@nuxt/test-utils/e2e'
 
 interface Project {
   id: string
@@ -9,12 +9,10 @@ interface Project {
   updatedAt: string
 }
 
-describe('Project API Endpoints', () => {
-  beforeAll(async () => {
-    await setup({
-      server: true,
-    })
-  }, 60000)
+describe('Project API Endpoints', async () => {
+  await setup({
+    server: true,
+  })
 
   describe('GET /api/projects', () => {
     it('should return an array of projects', async () => {

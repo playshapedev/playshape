@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeAll } from 'vitest'
-import { setup, $fetch } from '@nuxt/test-utils'
+import { describe, it, expect } from 'vitest'
+import { $fetch, setup } from '@nuxt/test-utils/e2e'
 
 interface HealthResponse {
   status: 'ok' | 'degraded'
@@ -8,12 +8,10 @@ interface HealthResponse {
   timestamp: number
 }
 
-describe('Health Check Endpoint', () => {
-  beforeAll(async () => {
-    await setup({
-      server: true,
-    })
-  }, 60000)
+describe('Health Check Endpoint', async () => {
+  await setup({
+    server: true,
+  })
 
   describe('GET /api/health', () => {
     it('should return status and platform info', async () => {
