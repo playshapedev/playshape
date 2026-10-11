@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll } from 'vitest'
-import type { activities, courses, courseSections, objectives, projects, skills } from '~~/server/database/schema'
-import { templates } from '~~/server/database/schema'
+import { eq } from 'drizzle-orm'
+import type { activities, courses, courseSections, projects } from '~~/server/database/schema'
+import { objectives, skills, templates } from '~~/server/database/schema'
 import { useDb } from '~~/server/utils/db'
 import { sampleTemplate } from '../../fixtures/projects'
 import { api } from '../utils/api'
@@ -101,6 +102,77 @@ describe('Skills API', () => {
     expect(edited.data.statement).toBe('Do the thing')
   })
 
+  it('trims a skill description and lets an edit clear it', async () => {
+    const project = await createProject()
+    const created = await api<Skill>(`/api/projects/${project.id}/skills`, {
+      method: 'POST',
+      body: { name: 'Coach a peer', description: '  Give useful feedback  ' },
+    })
+    expect(created.data.description).toBe('Give useful feedback')
+
+    const cleared = await api<Skill>(`/api/projects/${project.id}/skills/${created.data.id}`, {
+      method: 'PATCH',
+      body: { description: null },
+    })
+
+    expect(cleared.status).toBe(200)
+    expect(cleared.data.description).toBe('')
+  })
+
+  it('deletes an objective', async () => {
+    const project = await createProject()
+    const skill = await createSkill(project.id, 'Skill')
+    const objective = (await api<Objective>(`/api/projects/${project.id}/skills/${skill.id}/objectives`, {
+      method: 'POST',
+      body: { statement: 'Do the thing' },
+    })).data
+
+    const del = await api(`/api/projects/${project.id}/skills/${skill.id}/objectives/${objective.id}`, { method: 'DELETE' })
+    const list = await api<SkillWithDetails[]>(`/api/projects/${project.id}/skills`)
+
+    expect(del.status).toBe(204)
+    expect(list.data[0]!.objectives).toEqual([])
+  })
+
+  it('returns 404 for an objective requested under the wrong skill', async () => {
+    const project = await createProject()
+    const owner = await createSkill(project.id, 'Owner')
+    const other = await createSkill(project.id, 'Other')
+    const objective = (await api<Objective>(`/api/projects/${project.id}/skills/${owner.id}/objectives`, {
+      method: 'POST',
+      body: { statement: 'Do the thing' },
+    })).data
+    const wrongUrl = `/api/projects/${project.id}/skills/${other.id}/objectives/${objective.id}`
+
+    const patch = await api(wrongUrl, { method: 'PATCH', body: { statement: 'Moved' } })
+    const del = await api(wrongUrl, { method: 'DELETE' })
+
+    expect(patch.status).toBe(404)
+    expect(del.status).toBe(404)
+  })
+
+  it('returns 404 when listing skills for a project that does not exist', async () => {
+    const res = await api('/api/projects/missing-project/skills')
+
+    expect(res.status).toBe(404)
+  })
+
+  it('removes skills and objectives when their project is deleted', async () => {
+    const project = await createProject()
+    const skill = await createSkill(project.id, 'Doomed')
+    await api(`/api/projects/${project.id}/skills/${skill.id}/objectives`, {
+      method: 'POST',
+      body: { statement: 'Do the thing' },
+    })
+
+    const del = await api(`/api/projects/${project.id}`, { method: 'DELETE' })
+    const db = useDb()
+
+    expect(del.status).toBe(204)
+    expect(db.select().from(skills).where(eq(skills.id, skill.id)).all()).toEqual([])
+    expect(db.select().from(objectives).where(eq(objectives.skillId, skill.id)).all()).toEqual([])
+  })
+
   it('returns 404 for a skill from another project', async () => {
     const owner = await createProject('Owner')
     const other = await createProject('Other')
@@ -140,6 +212,23 @@ describe('Skills API', () => {
     const res = await api(`${url}/skills`, { method: 'PUT', body: { skillIds: [foreign.id] } })
 
     expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when linking skills through a different course', async () => {
+    const project = await createProject()
+    const skill = await createSkill(project.id, 'Skill')
+    const { activity } = await createActivity(project.id)
+    const otherCourse = (await api<Course>(`/api/projects/${project.id}/courses`, {
+      method: 'POST',
+      body: { name: 'Other course' },
+    })).data
+
+    const res = await api(`/api/projects/${project.id}/courses/${otherCourse.id}/activities/${activity.id}/skills`, {
+      method: 'PUT',
+      body: { skillIds: [skill.id] },
+    })
+
+    expect(res.status).toBe(404)
   })
 
   it('unlinks activities when a skill is deleted', async () => {

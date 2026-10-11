@@ -4,7 +4,7 @@ import { projects, skills } from '~~/server/database/schema'
 
 const createSkillSchema = z.object({
   name: z.string().trim().min(1, 'Skill name is required'),
-  description: z.string().optional(),
+  description: z.string().trim().nullable().optional(),
 })
 
 export default defineEventHandler(async (event) => {

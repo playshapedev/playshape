@@ -4,7 +4,8 @@ import { skills } from '~~/server/database/schema'
 
 const updateSkillSchema = z.object({
   name: z.string().trim().min(1).optional(),
-  description: z.string().optional(),
+  // null or blank clears the description
+  description: z.string().trim().nullable().optional().transform(v => v === null ? '' : v),
   sortOrder: z.number().int().optional(),
 })
 

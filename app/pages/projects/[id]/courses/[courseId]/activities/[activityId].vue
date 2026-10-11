@@ -105,9 +105,18 @@ function toggleSkill(skillId: string, checked: boolean) {
 async function handleSaveSkills() {
   savingSkills.value = true
   try {
-    await setActivitySkills(projectId, courseId, activityId, selectedSkillIds.value)
+    // Drop ticks for skills deleted since the dialog opened
+    await refreshProjectSkills()
+    const existing = new Set(projectSkills.value?.map(s => s.id) ?? [])
+    const result = await setActivitySkills(
+      projectId,
+      courseId,
+      activityId,
+      selectedSkillIds.value.filter(id => existing.has(id)),
+    )
     showSkillsModal.value = false
-    await refresh()
+    // Update in place rather than refetching, so unsaved form edits aren't reset
+    if (activity.value) activity.value = { ...activity.value, skillIds: result.skillIds }
     toast.add({ title: 'Skills updated', color: 'success' })
   }
   catch (e: unknown) {
